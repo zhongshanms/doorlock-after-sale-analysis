@@ -604,9 +604,32 @@ async function loadData() {
     console.warn('UploadDB check failed:', e);
   }
 
+  // ── Check IndexedDB cache first (instant load on repeat visits) ──
+  try {
+    let versionUrl = './data/version.json';
+    let vResp = await fetch(versionUrl, {cache: 'no-store'});
+    if (vResp.ok) {
+      let versionInfo = await vResp.json();
+      let currentVersion = versionInfo.version || '';
+      let db = getDataCacheDB();
+      let cached = await db.cache.get('compact_data');
+      if (cached && cached.version === currentVersion) {
+        if (detailEl) detailEl.textContent = '正在加载缓存数据...';
+        let json = JSON.parse(cached.data);
+        initData(json);
+        var overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.style.display = 'none';
+        debugLog('数据来源: IndexedDB缓存 (售后=' + gAfterSale.length + ' 销量=' + gSales.length + ')', 'success');
+        return;
+      }
+    }
+  } catch(e) {
+    console.warn('IndexedDB cache check failed, will fetch from network:', e.message);
+  }
+
   // ── Fallback: load from compact JSON file ──
   try {
-    if (detailEl) detailEl.textContent = '正在加载预置数据...';
+    if (detailEl) detailEl.textContent = '正在下载数据...';
     let dataUrl = './data/after-sale-data-compact.json?v=' + APP_VERSION;
     let resp = await fetchWithTimeout(dataUrl, 30000);
     if (resp.ok) {
@@ -616,7 +639,7 @@ async function loadData() {
       cacheDataInBackground(json);
       var overlay = document.getElementById('loading-overlay');
       if (overlay) overlay.style.display = 'none';
-      debugLog('数据来源: 预置JSON文件 (售后=' + gAfterSale.length + ' 销量=' + gSales.length + ')', 'success');
+      debugLog('数据来源: 网络下载 (售后=' + gAfterSale.length + ' 销量=' + gSales.length + ')', 'success');
       return;
     }
   } catch(e) {
@@ -644,7 +667,7 @@ function checkVersionInBackground(currentData) {
     if (!v || !v.updated) return;
     let db = getDataCacheDB();
     return db.cache.get('compact_data').then(function(cached) {
-      if (cached && cached.version !== v.updated) {
+      if (cached && cached.version !== v.version) {
         console.log('Newer version detected, will update on next reload');
         showToast('检测到新数据版本，下次刷新将自动更新', '');
       }
@@ -663,7 +686,7 @@ function cacheDataInBackground(json) {
       return {};
     }).then(function(v) {
       getDataCacheDB().then(function(db) {
-        return db.cache.put({key: 'compact_data', version: (v.updated || 'unknown'), data: rawJson});
+        return db.cache.put({key: 'compact_data', version: (v.version || 'unknown'), data: rawJson});
       }).then(function() {
         console.log('Data cached in IndexedDB for next visit');
       }).catch(function(e) {
