@@ -428,7 +428,7 @@ function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
 function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : '0%'; }
 
 // ===== Debug Panel Helpers =====
-var APP_VERSION = '2026-07-14-v1'; // bump on each deploy to detect stale cache
+var APP_VERSION = '2026-07-14-v2'; // bump on each deploy to detect stale cache
 var UPLOAD_SCHEMA_VER = 'doorlock-v1'; // bump when field mapping changes → auto-clear UploadDB
 console.log('%c[APP] Version: ' + APP_VERSION, 'color:#4ec9b0;font-weight:bold');
 window.__debugLines = [];
@@ -713,20 +713,15 @@ function expandCompact(json) {
 
   if (json.ar) {
     result.after_sale_records = json.ar.map(r => ({
-      ticket_id: r.tid || '',
       after_sale_type: r.t || '',
-      product_name: r.p || '',
       sku: r.sku || '',
       reason: r.r || '',
       refund_status: r.rs || '',
-      order_amount: r.oa || 0,
       refund_amount: r.ra || 0,
       return_qty: r.rq || 1,
       tag: r.tg || '',
       create_time: r.ct || '',
       create_date: r.ct || '',
-      order_time: '',
-      order_id: '',
       responsibility: r.resp || '',
       year: r.y || 0,
     }));
@@ -737,22 +732,9 @@ function expandCompact(json) {
       date: r.d || '',
       date_date: r.d || '',
       sku: r.sku || '',
-      product_name: r.pn || '',
-      title: '',
-      attribute: '',
-      shop: '',
-      platform: r.pf || '',
       sales_qty: r.sq || 0,
       order_qty: r.oq || 1,
-      revenue: r.rv || 0,
-      formatted_revenue: '',
       year: r.y || 0,
-      refund_amount: 0,
-      return_qty: 0,
-      refund_status: '',
-      reason: '',
-      tag: '',
-      after_sale_type: '',
     }));
   }
 
@@ -880,23 +862,16 @@ async function mergeUploadedData() {
       if (!row) return;
 
       if (rec.type === 'after') {
-        var tid = row.ticket_id || row['工单号'] || row['Ticket ID'] || row['售后工单单号'] || '';
-        if (!tid) { afterNoKey++; return; }
         var normalized = {
-          ticket_id: tid,
           after_sale_type: row.after_sale_type || row['售后类型'] || row['After Sale Type'] || '',
-          product_name: row.product_name || row['商品名称'] || row['Product Name'] || '',
           sku: row.sku || row['SKU'] || row['Sku'] || '',
           reason: row.reason || row['售后原因'] || row['Reason'] || '',
           refund_status: row.refund_status || row['退款状态'] || row['Refund Status'] || '',
-          order_amount: parseFloat(row.order_amount || row['订单金额'] || 0) || 0,
           refund_amount: parseFloat(row.refund_amount || row['退款金额'] || row['Refund Amount'] || 0) || 0,
           return_qty: parseInt(row.return_qty || row['售后数量'] || row['退货数量'] || row['Return Qty'] || 1) || 1,
           tag: row.tag || row['标签'] || row['买家备注'] || row['Tag'] || '',
           create_time: row.create_time || row.create_date || row['创建时间'] || row['售后时间'] || row['Create Date'] || '',
           create_date: row.create_date || row.create_time || row['创建时间'] || row['售后时间'] || row['Create Date'] || '',
-          order_time: row.order_time || row['订购时间'] || row['下单时间'] || '',
-          order_id: row.order_id || row['订单号'] || '',
           responsibility: row.responsibility || row.resp_party || row['责任方'] || row['Responsibility'] || '',
           year: rec.year || 0,
         };
@@ -914,16 +889,9 @@ async function mergeUploadedData() {
         if (!d || !s) { salesNoKey++; return; }
         var normalized = {
           date: d, date_date: d, sku: s,
-          product_name: row.product_name || row['商品名称'] || row['Product Name'] || '',
-          title: row.title || row['标题'] || '',
-          attribute: row.attribute || row['属性'] || '',
-          shop: row.shop || row['店铺'] || '',
-          platform: row.platform || row['平台'] || '',
           sales_qty: parseInt(row.sales_qty || row['销量'] || row['Sales Qty'] || 0) || 0,
           order_qty: parseInt(row.order_qty || row['订单量'] || row['Order Qty'] || 1) || 1,
-          revenue: parseFloat(row.revenue || row['收入'] || 0) || 0,
-          formatted_revenue: '', year: rec.year || 0,
-          refund_amount: 0, return_qty: 0, refund_status: '', reason: '', tag: '', after_sale_type: '',
+          year: rec.year || 0,
         };
         var rowKey = JSON.stringify(Object.entries(normalized).sort((a,b) => a[0].localeCompare(b[0])).map(([k,v]) => [k, v === undefined ? '' : String(v)]));
         if (existingSalesKeys.has(rowKey)) {
@@ -1010,23 +978,15 @@ async function rebuildFromUploadDB(type) {
 
       if (type === 'after') {
         if (row.length < 5) continue;
-        var tid = String(row[0] || '');
-        if (!tid) continue;
         var normalized = {
-          ticket_id: tid,
           after_sale_type: String(row[1] || ''),
-          product_name: '',
           sku: String(row[2] || ''),
           reason: String(row[3] || ''),
           refund_status: String(row[4] || ''),
-          order_amount: 0,
-          refund_amount: 0,
           return_qty: parseInt(row[5] || 1) || 1,
           tag: String(row[6] || ''),
           create_time: String(row[8] || ''),
           create_date: String(row[8] || ''),
-          order_time: String(row[7] || ''),
-          order_id: '',
           responsibility: String(row[3] || ''),
           year: records[i].year || 0,
         };
@@ -1037,12 +997,9 @@ async function rebuildFromUploadDB(type) {
         if (!d || !s) continue;
         var normalized = {
           date: d, date_date: d, sku: s,
-          product_name: '', title: '', attribute: '', shop: '', platform: '',
           sales_qty: parseInt(row[2] || 0) || 0,
           order_qty: parseInt(row[3] || 1) || 1,
-          revenue: 0,
-          formatted_revenue: '', year: records[i].year || 0,
-          refund_amount: 0, return_qty: 0, refund_status: '', reason: '', tag: '', after_sale_type: '',
+          year: records[i].year || 0,
         };
       }
 
@@ -2272,13 +2229,10 @@ document.addEventListener('DOMContentLoaded', function() {
 function compactAfterSale(records) {
   return records.map(function(r) {
     var o = {};
-    if (r.ticket_id) o.tid = r.ticket_id;
     if (r.after_sale_type) o.t = r.after_sale_type;
-    if (r.product_name) o.p = r.product_name;
     if (r.sku) o.sku = r.sku;
     if (r.reason) o.r = r.reason;
     if (r.refund_status) o.rs = r.refund_status;
-    if (r.order_amount) o.oa = r.order_amount;
     if (r.refund_amount) o.ra = r.refund_amount;
     if (r.return_qty) o.rq = r.return_qty;
     if (r.tag) o.tg = r.tag;
@@ -2294,12 +2248,8 @@ function compactSales(records) {
     var o = {};
     if (r.date_date) o.d = r.date_date;
     if (r.sku) o.sku = r.sku;
-    if (r.product_name) o.pn = r.product_name;
-    if (r.platform) o.pf = r.platform;
     if (r.sales_qty) o.sq = r.sales_qty;
     if (r.order_qty) o.oq = r.order_qty;
-    if (r.revenue) o.rv = r.revenue;
-    if (r.formatted_revenue) o.fr = r.formatted_revenue;
     if (r.year) o.y = r.year;
     return o;
   });
