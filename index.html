@@ -1650,8 +1650,14 @@ function applyDetailWithParams() {
 
   let afterF = filterAfterSale(start, end, skuTerm);
   if (statusFilter) afterF = afterF.filter(r => r.refund_status === statusFilter);
-  if (reasonTerm) afterF = afterF.filter(r => r.reason && r.reason.includes(reasonTerm));
-  if (tagTerm) afterF = afterF.filter(r => r.tag && r.tag.includes(tagTerm));
+  if (reasonTerm) {
+    if (reasonTerm === BLANK_SENTINEL) afterF = afterF.filter(r => !r.reason);
+    else afterF = afterF.filter(r => r.reason && r.reason.includes(reasonTerm));
+  }
+  if (tagTerm) {
+    if (tagTerm === BLANK_SENTINEL) afterF = afterF.filter(r => !r.tag);
+    else afterF = afterF.filter(r => r.tag && r.tag.includes(tagTerm));
+  }
 
   // Sort
   afterF.sort((a,b) => {
@@ -1684,45 +1690,74 @@ const _autocompleteCfg = {
   reason: { inputId: 'dt-reason', listId: 'dt-reason-list', field: 'reason' },
   tag:    { inputId: 'dt-tag',    listId: 'dt-tag-list',    field: 'tag'    }
 };
+const BLANK_SENTINEL = '(空白)';
 
 function _countField(field) {
-  const counter = {};
-  for (const r of gAfterSale) {
+  // Use the current date/SKU filter so percentages reflect the visible time window
+  const start = document.getElementById('dt-start').value;
+  const end = document.getElementById('dt-end').value;
+  const skuTerm = document.getElementById('dt-sku').value.trim();
+  const dataset = (typeof filterAfterSale === 'function')
+    ? filterAfterSale(start, end, skuTerm)
+    : gAfterSale;
+  const counter = { __BLANK__: 0 };
+  for (const r of dataset) {
     const v = (r[field] || '').trim();
-    if (!v) continue;
-    counter[v] = (counter[v] || 0) + 1;
+    if (!v) counter.__BLANK__++;
+    else counter[v] = (counter[v] || 0) + 1;
   }
-  return counter;
+  return { counter, total: dataset.length };
 }
 
 function _renderAutocompleteList(cfg, term) {
   const listEl = document.getElementById(cfg.listId);
   if (!listEl) return;
-  const counter = _countField(cfg.field);
-  const total = gAfterSale.length || 1;
+  const { counter, total } = _countField(cfg.field);
   const lowerTerm = (term || '').toLowerCase();
 
-  let items = Object.entries(counter)
-    .filter(([k]) => !lowerTerm || k.toLowerCase().includes(lowerTerm))
-    .sort((a, b) => b[1] - a[1])
+  // Pre-compute percentages with rounding correction so they sum to 100%
+  const entries = Object.entries(counter);
+  const pcts = entries.map(([_, cnt]) => total > 0 ? cnt / total * 100 : 0);
+  const sum = pcts.reduce((a, b) => a + b, 0);
+  if (Math.abs(sum - 100) > 0.001 && pcts.length > 0) {
+    let maxIdx = 0;
+    for (let k = 1; k < pcts.length; k++) { if (pcts[k] > pcts[maxIdx]) maxIdx = k; }
+    pcts[maxIdx] += (100 - sum);
+  }
+
+  // Filter and sort; always keep __BLANK__ at the top if it has any count
+  let items = entries
+    .map(([k, cnt], i) => [k, cnt, pcts[i]])
+    .filter(([k]) => k === '__BLANK__' || !lowerTerm || k.toLowerCase().includes(lowerTerm))
+    .sort((a, b) => {
+      if (a[0] === '__BLANK__') return -1;
+      if (b[0] === '__BLANK__') return 1;
+      return b[1] - a[1];
+    })
     .slice(0, 30);
 
   if (items.length === 0) {
     listEl.innerHTML = '<div class="autocomplete-item empty">无匹配项</div>';
   } else {
-    listEl.innerHTML = items.map(([val, cnt]) => {
-      const pct = (cnt / total * 100).toFixed(1);
-      const safe = String(val).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-      const highlighted = lowerTerm
-        ? safe.replace(new RegExp(lowerTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`)
-        : safe;
-      return `<div class="autocomplete-item" data-value="${safe}"><span class="label">${highlighted}</span><span class="pct">${pct}%</span></div>`;
+    listEl.innerHTML = items.map(([val, cnt, pct]) => {
+      const isBlank = val === '__BLANK__';
+      const displayVal = isBlank ? BLANK_SENTINEL : val;
+      const safe = String(displayVal).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      const highlighted = (isBlank || !lowerTerm)
+        ? safe
+        : safe.replace(new RegExp(lowerTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`);
+      return `<div class="autocomplete-item" data-value="${isBlank ? '__BLANK__' : safe}"><span class="label">${highlighted}</span><span class="pct">${pct.toFixed(1)}%</span></div>`;
     }).join('');
     listEl.querySelectorAll('.autocomplete-item:not(.empty)').forEach(item => {
       item.addEventListener('mousedown', function(e) {
         e.preventDefault();
         const val = this.getAttribute('data-value');
-        document.getElementById(cfg.inputId).value = val;
+        const inputEl = document.getElementById(cfg.inputId);
+        if (val === '__BLANK__') {
+          inputEl.value = BLANK_SENTINEL;
+        } else {
+          inputEl.value = val;
+        }
         listEl.classList.remove('show');
         if (typeof applyDetail === 'function') applyDetail();
       });
@@ -2080,12 +2115,23 @@ function setupAutoRefresh() {
   el = document.getElementById('an-end');       if (el) el.addEventListener('change', function(){ syncDates('an'); applyAnalysis(); });
   el = document.getElementById('an-sku');       if (el) el.addEventListener('input', _debounce('an-sku', applyAnalysis, 400));
   // Detail
-  el = document.getElementById('dt-start');     if (el) el.addEventListener('change', function(){ syncDates('dt'); applyDetail(); });
-  el = document.getElementById('dt-end');       if (el) el.addEventListener('change', function(){ syncDates('dt'); applyDetail(); });
-  el = document.getElementById('dt-sku');       if (el) el.addEventListener('input', _debounce('dt-sku', applyDetail, 400));
+  el = document.getElementById('dt-start');     if (el) el.addEventListener('change', function(){ syncDates('dt'); applyDetail(); _refreshDetailAutocomplete(); });
+  el = document.getElementById('dt-end');       if (el) el.addEventListener('change', function(){ syncDates('dt'); applyDetail(); _refreshDetailAutocomplete(); });
+  el = document.getElementById('dt-sku');       if (el) el.addEventListener('input', _debounce('dt-sku', function(){ applyDetail(); _refreshDetailAutocomplete(); }, 400));
   el = document.getElementById('dt-status');     if (el) el.addEventListener('change', applyDetail);
   el = document.getElementById('dt-reason');    if (el) el.addEventListener('input', _debounce('dt-reason', applyDetail, 400));
   el = document.getElementById('dt-tag');       if (el) el.addEventListener('input', _debounce('dt-tag', applyDetail, 400));
+}
+
+function _refreshDetailAutocomplete() {
+  // Re-render the reason/tag autocomplete dropdowns if they are currently open
+  Object.values(_autocompleteCfg).forEach(cfg => {
+    const listEl = document.getElementById(cfg.listId);
+    const inputEl = document.getElementById(cfg.inputId);
+    if (listEl && listEl.classList.contains('show') && inputEl) {
+      _renderAutocompleteList(cfg, inputEl.value);
+    }
+  });
 }
 
 // ========== INIT ==========
