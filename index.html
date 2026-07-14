@@ -96,10 +96,16 @@ input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2
 .autocomplete-list.show{display:block}
 .autocomplete-item{padding:7px 12px;cursor:pointer;font-size:var(--font-sm);display:flex;justify-content:space-between;align-items:center;gap:12px;transition:background .15s;color:var(--text)}
 .autocomplete-item:hover,.autocomplete-item.active{background:rgba(26,115,232,.08)}
+.autocomplete-item.selected{background:rgba(26,115,232,.15);font-weight:600}
 .autocomplete-item .pct{color:var(--text-secondary);font-size:0.78rem;flex-shrink:0;font-weight:500}
 .autocomplete-item.empty{color:var(--text-secondary);text-align:center;padding:14px;cursor:default;display:block}
 .autocomplete-item.empty:hover{background:transparent}
 .autocomplete-item mark{background:rgba(245,154,35,.25);color:inherit;padding:0 1px;border-radius:2px}
+.filter-chip{display:none;align-items:center;gap:4px;background:rgba(26,115,232,.12);color:var(--primary);border-radius:12px;padding:2px 6px 2px 10px;font-size:var(--font-sm);white-space:nowrap;max-width:200px}
+.filter-chip.show{display:inline-flex}
+.filter-chip .chip-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-chip .chip-close{cursor:pointer;font-size:1rem;line-height:1;opacity:.6;flex-shrink:0}
+.filter-chip .chip-close:hover{opacity:1}
 
 /* ========== Data Table ========== */
 .data-table-wrap{background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
@@ -315,8 +321,8 @@ tbody tr:hover{background:#f8f9ff}
     <label>日期:</label><input type="date" id="dt-start">
     <label>至</label><input type="date" id="dt-end">
     <label>SKU:</label><input type="text" id="dt-sku" placeholder="搜索SKU...">
-    <label>售后原因:</label><span class="autocomplete-wrap"><input type="text" id="dt-reason" placeholder="搜索售后原因..." autocomplete="off"><div class="autocomplete-list" id="dt-reason-list"></div></span>
-    <label>标签:</label><span class="autocomplete-wrap"><input type="text" id="dt-tag" placeholder="搜索标签..." autocomplete="off"><div class="autocomplete-list" id="dt-tag-list"></div></span>
+    <label>售后原因:</label><span class="autocomplete-wrap"><input type="text" id="dt-reason" placeholder="选择售后原因..." autocomplete="off"><div class="autocomplete-list" id="dt-reason-list"></div></span><span class="filter-chip" id="dt-reason-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('reason')">×</span></span>
+    <label>标签:</label><span class="autocomplete-wrap"><input type="text" id="dt-tag" placeholder="选择标签..." autocomplete="off"><div class="autocomplete-list" id="dt-tag-list"></div></span><span class="filter-chip" id="dt-tag-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('tag')">×</span></span>
     <label>状态:</label><select id="dt-status"><option value="">全部</option></select>
     <button class="btn btn-outline" onclick="resetDetail()">🔄 重置</button>
   </div>
@@ -1631,6 +1637,10 @@ function resetDetail() {
   document.getElementById('dt-status').value = '';
   document.getElementById('dt-reason').value = '';
   document.getElementById('dt-tag').value = '';
+  // Clear WPS-style filter state and hide chips
+  gDetailFilter.reason = '';
+  gDetailFilter.tag = '';
+  Object.values(_autocompleteCfg).forEach(cfg => _updateFilterChip(cfg));
   refreshDetail();
 }
 
@@ -1645,8 +1655,8 @@ function applyDetailWithParams() {
   let end = document.getElementById('dt-end').value;
   let skuTerm = document.getElementById('dt-sku').value.trim();
   let statusFilter = document.getElementById('dt-status').value;
-  let reasonTerm = document.getElementById('dt-reason').value.trim();
-  let tagTerm = document.getElementById('dt-tag').value.trim();
+  let reasonTerm = gDetailFilter.reason;
+  let tagTerm = gDetailFilter.tag;
 
   let afterF = filterAfterSale(start, end, skuTerm);
   if (statusFilter) afterF = afterF.filter(r => r.refund_status === statusFilter);
@@ -1687,10 +1697,11 @@ function applyDetailWithParams() {
 
 // ========== AUTOCOMPLETE for reason/tag inputs ==========
 const _autocompleteCfg = {
-  reason: { inputId: 'dt-reason', listId: 'dt-reason-list', field: 'reason' },
-  tag:    { inputId: 'dt-tag',    listId: 'dt-tag-list',    field: 'tag'    }
+  reason: { inputId: 'dt-reason', listId: 'dt-reason-list', field: 'reason', chipId: 'dt-reason-chip' },
+  tag:    { inputId: 'dt-tag',    listId: 'dt-tag-list',    field: 'tag',    chipId: 'dt-tag-chip'    }
 };
 const BLANK_SENTINEL = '(空白)';
+const gDetailFilter = { reason: '', tag: '' };
 
 function _countField(field) {
   // Use the current date/SKU filter so percentages reflect the visible time window
@@ -1736,6 +1747,9 @@ function _renderAutocompleteList(cfg, term) {
     })
     .slice(0, 30);
 
+  // Currently selected value for highlighting
+  const currentFilter = gDetailFilter[cfg.field];
+
   if (items.length === 0) {
     listEl.innerHTML = '<div class="autocomplete-item empty">无匹配项</div>';
   } else {
@@ -1746,18 +1760,21 @@ function _renderAutocompleteList(cfg, term) {
       const highlighted = (isBlank || !lowerTerm)
         ? safe
         : safe.replace(new RegExp(lowerTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`);
-      return `<div class="autocomplete-item" data-value="${isBlank ? '__BLANK__' : safe}"><span class="label">${highlighted}</span><span class="pct">${pct.toFixed(1)}%</span></div>`;
+      const isSelected = (isBlank && currentFilter === BLANK_SENTINEL) || (!isBlank && currentFilter === val);
+      return `<div class="autocomplete-item${isSelected ? ' selected' : ''}" data-value="${isBlank ? '__BLANK__' : safe}"><span class="label">${highlighted}</span><span class="pct">${pct.toFixed(1)}%</span></div>`;
     }).join('');
     listEl.querySelectorAll('.autocomplete-item:not(.empty)').forEach(item => {
       item.addEventListener('mousedown', function(e) {
         e.preventDefault();
-        const val = this.getAttribute('data-value');
-        const inputEl = document.getElementById(cfg.inputId);
-        if (val === '__BLANK__') {
-          inputEl.value = BLANK_SENTINEL;
-        } else {
-          inputEl.value = val;
-        }
+        const rawVal = this.getAttribute('data-value');
+        const isBlank = rawVal === '__BLANK__';
+        const filterVal = isBlank ? BLANK_SENTINEL : rawVal;
+        // Set the filter state (NOT the input value)
+        gDetailFilter[cfg.field] = filterVal;
+        // Show chip
+        _updateFilterChip(cfg);
+        // Clear input text so next focus shows full list
+        document.getElementById(cfg.inputId).value = '';
         listEl.classList.remove('show');
         if (typeof applyDetail === 'function') applyDetail();
       });
@@ -1766,19 +1783,46 @@ function _renderAutocompleteList(cfg, term) {
   listEl.classList.add('show');
 }
 
+function _updateFilterChip(cfg) {
+  const chipEl = document.getElementById(cfg.chipId);
+  if (!chipEl) return;
+  const val = gDetailFilter[cfg.field];
+  if (val) {
+    chipEl.querySelector('.chip-text').textContent = val;
+    chipEl.classList.add('show');
+  } else {
+    chipEl.classList.remove('show');
+  }
+}
+
+function clearDetailFilter(field) {
+  gDetailFilter[field] = '';
+  const cfg = Object.values(_autocompleteCfg).find(c => c.field === field);
+  if (cfg) _updateFilterChip(cfg);
+  if (typeof applyDetail === 'function') applyDetail();
+}
+
 function _initAutocomplete() {
   Object.values(_autocompleteCfg).forEach(cfg => {
     const inputEl = document.getElementById(cfg.inputId);
     const listEl = document.getElementById(cfg.listId);
     if (!inputEl || !listEl) return;
 
-    inputEl.addEventListener('focus', () => _renderAutocompleteList(cfg, inputEl.value));
+    // On focus: always show full list (input text is empty between selections)
+    inputEl.addEventListener('focus', () => _renderAutocompleteList(cfg, ''));
+    // On input: filter dropdown items by typed text (search mode only)
     inputEl.addEventListener('input', () => _renderAutocompleteList(cfg, inputEl.value));
-    inputEl.addEventListener('blur', () => setTimeout(() => listEl.classList.remove('show'), 150));
+    // On blur: clear search text and close dropdown
+    inputEl.addEventListener('blur', () => {
+      setTimeout(() => {
+        listEl.classList.remove('show');
+        inputEl.value = '';
+      }, 150);
+    });
   });
 
   document.addEventListener('click', function(e) {
-    if (!e.target.closest('.autocomplete-wrap')) {
+    if (!e.target.closest('.autocomplete-wrap') && !e.target.closest('.filter-chip')) {
       document.querySelectorAll('.autocomplete-list.show').forEach(el => el.classList.remove('show'));
     }
   });
@@ -2119,8 +2163,7 @@ function setupAutoRefresh() {
   el = document.getElementById('dt-end');       if (el) el.addEventListener('change', function(){ syncDates('dt'); applyDetail(); _refreshDetailAutocomplete(); });
   el = document.getElementById('dt-sku');       if (el) el.addEventListener('input', _debounce('dt-sku', function(){ applyDetail(); _refreshDetailAutocomplete(); }, 400));
   el = document.getElementById('dt-status');     if (el) el.addEventListener('change', applyDetail);
-  el = document.getElementById('dt-reason');    if (el) el.addEventListener('input', _debounce('dt-reason', applyDetail, 400));
-  el = document.getElementById('dt-tag');       if (el) el.addEventListener('input', _debounce('dt-tag', applyDetail, 400));
+  // dt-reason / dt-tag inputs are handled by _initAutocomplete (search-only, no filter on input)
 }
 
 function _refreshDetailAutocomplete() {
