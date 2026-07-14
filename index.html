@@ -1235,10 +1235,19 @@ function makePieChart(canvasId, labels, values, colors) {
   let legendId = 'legend-' + canvasId;
   let legendEl = document.getElementById(legendId);
   if (legendEl) {
+    // Pre-compute percentages as numbers, then adjust to sum exactly 100%
+    let pcts = values.map(v => total > 0 ? v / total * 100 : 0);
+    let sum = pcts.reduce((a,b) => a + b, 0);
+    // Fix rounding: adjust the largest category
+    if (Math.abs(sum - 100) > 0.001 && pcts.length > 0) {
+      let maxIdx = 0;
+      for (let k = 1; k < pcts.length; k++) { if (pcts[k] > pcts[maxIdx]) maxIdx = k; }
+      pcts[maxIdx] += (100 - sum);
+    }
     let html = '';
     labels.forEach((label, i) => {
       let v = values[i];
-      let pct = total > 0 ? (v/total*100).toFixed(1) : '0';
+      let pct = pcts[i].toFixed(1);
       let c = chartColors[i % chartColors.length];
       html += `<div class="legend-item" onclick="toggleDoughnutSlice('${canvasId}',${i})">
         <span class="legend-dot" style="background:${c}"></span>
@@ -1445,7 +1454,7 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
 
   // Donut chart
   let typeCounts = {};
-  afterF.forEach(r => { let t = r.after_sale_type||'其他'; typeCounts[t] = (typeCounts[t]||0) + 1; });
+  afterF.forEach(r => { let t = r.after_sale_type||'(空白)'; typeCounts[t] = (typeCounts[t]||0) + 1; });
   let typeLabels = Object.keys(typeCounts).sort((a,b) => typeCounts[b]-typeCounts[a]);
   let typeVals = typeLabels.map(l => typeCounts[l]);
   makePieChart('chartTypeDonut', typeLabels, typeVals);
@@ -1508,7 +1517,7 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
 
   // Chart 4: 售后原因 TOP10
   let reasonMap = {};
-  afterF.forEach(r => { let t = r.reason||'其他'; reasonMap[t] = (reasonMap[t]||0) + 1; });
+  afterF.forEach(r => { let t = r.reason||'(空白)'; reasonMap[t] = (reasonMap[t]||0) + 1; });
   let rl = Object.keys(reasonMap).sort((a,b) => reasonMap[b]-reasonMap[a]).slice(0,10);
   makeHorizontalBar('chart4', rl, rl.map(r => reasonMap[r]), '工单数');
 
@@ -1582,7 +1591,7 @@ function applyAnalysisWithParams(start, end, skuTerm) {
 
   // 一、标签分布 TOP30
   let tagMap = {};
-  afterF.forEach(r => { let t = r.tag||'其他'; tagMap[t] = (tagMap[t]||0) + 1; });
+  afterF.forEach(r => { let t = r.tag||'(空白)'; tagMap[t] = (tagMap[t]||0) + 1; });
   let total3 = afterF.length;
   let tagArr = Object.entries(tagMap).sort((a,b) => b[1]-a[1]).slice(0,30);
   document.getElementById('analysisTag').innerHTML = tagArr.map(([k,v],i) =>
