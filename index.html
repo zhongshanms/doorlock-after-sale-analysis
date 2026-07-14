@@ -412,7 +412,7 @@ function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : 
 
 // ===== Debug Panel Helpers =====
 var APP_VERSION = '2026-07-14-v1'; // bump on each deploy to detect stale cache
-var UPLOAD_SCHEMA_VER = 'v3-fixed-column-names'; // bump when field mapping changes → auto-clear UploadDB
+var UPLOAD_SCHEMA_VER = 'doorlock-v1'; // bump when field mapping changes → auto-clear UploadDB
 console.log('%c[APP] Version: ' + APP_VERSION, 'color:#4ec9b0;font-weight:bold');
 window.__debugLines = [];
 window.__mergeCallCount = 0;
@@ -590,7 +590,7 @@ async function loadData() {
   // ── Fallback: load from compact JSON file ──
   try {
     if (detailEl) detailEl.textContent = '正在加载预置数据...';
-    let dataUrl = './data/after-sale-data-compact.json';
+    let dataUrl = './data/after-sale-data-compact.json?v=' + APP_VERSION;
     let resp = await fetchWithTimeout(dataUrl, 30000);
     if (resp.ok) {
       if (detailEl) detailEl.textContent = '正在解析数据...';
@@ -1698,7 +1698,7 @@ function handleFile(input, type) {
 let uploadDB;
 function getUploadDB() {
   if (!uploadDB) {
-    uploadDB = new Dexie('UploadStore');
+    uploadDB = new Dexie('DoorlockUploadStore');
     uploadDB.version(1).stores({
       records: '++id,type,year'
     });
@@ -1710,7 +1710,7 @@ function getUploadDB() {
 let dataCacheDB;
 function getDataCacheDB() {
   if (!dataCacheDB) {
-    dataCacheDB = new Dexie('DataCache');
+    dataCacheDB = new Dexie('DoorlockDataCache');
     dataCacheDB.version(1).stores({
       cache: 'key'
     });
@@ -1855,8 +1855,8 @@ async function resetUploadData() {
       });
     }
 
-    var del1 = await nativeDeleteDB('UploadStore');
-    var del2 = await nativeDeleteDB('DataCache');
+    var del1 = await nativeDeleteDB('DoorlockUploadStore');
+    var del2 = await nativeDeleteDB('DoorlockDataCache');
     console.log('[RESET] Delete results: UploadStore=' + del1 + ', DataCache=' + del2);
 
     // ── 步骤3: 兜底 clear（防止浏览器重建了空库）──
@@ -1864,7 +1864,7 @@ async function resetUploadData() {
     console.log('[RESET] Step 3: Fallback clear');
 
     try {
-      var uDB = new Dexie('UploadStore');
+      var uDB = new Dexie('DoorlockUploadStore');
       uDB.version(1).stores({ records: '++id,type,year' });
       var countBefore = await uDB.records.count();
       await uDB.records.clear();
@@ -1874,7 +1874,7 @@ async function resetUploadData() {
     } catch(e) { console.log('[RESET] UploadStore fallback: ' + e.message); }
 
     try {
-      var dDB = new Dexie('DataCache');
+      var dDB = new Dexie('DoorlockDataCache');
       dDB.version(1).stores({ cache: 'key' });
       var cBefore = await dDB.cache.count();
       await dDB.cache.clear();
