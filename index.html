@@ -216,9 +216,8 @@ tbody tr:hover{background:#f8f9ff}
   <button class="nav-btn" data-tab="upload" style="display:none">📤 上传管理</button>
   <button class="nav-btn active" data-tab="overview">📋 概况</button>
   <button class="nav-btn" data-tab="charts">📈 可视化图表</button>
-  <button class="nav-btn" data-tab="analysis">🔍 售后分析</button>
   <button class="nav-btn" data-tab="detail">📝 明细数据</button>
-</nav>
+  <button class="nav-btn" data-tab="analysis">🔍 售后分析</button></nav>
 
 <!-- Main Content -->
 <div class="main">
@@ -310,18 +309,6 @@ tbody tr:hover{background:#f8f9ff}
   </div>
 </div>
 
-<!-- Tab: Analysis -->
-<div class="tab-content" id="tab-analysis">
-  <div class="filter-bar">
-    <label>日期:</label><input type="date" id="an-start">
-    <label>至</label><input type="date" id="an-end">
-    <label>SKU:</label><input type="text" id="an-sku" placeholder="搜索SKU...">
-    <button class="btn btn-outline" onclick="resetAnalysis()">🔄 重置</button>
-  </div>
-  <div class="data-table-wrap"><h3>一、标签分布 TOP30</h3><div class="table-scroll"><table><thead><tr><th style="width:5%">#</th><th style="width:60%">标签</th><th style="width:18%;text-align:right">工单数</th><th style="width:17%;text-align:right">占比</th></tr></thead><tbody id="analysisTag"></tbody></table></div></div>
-  <div class="data-table-wrap"><h3>二、售后数量 TOP30 SKU</h3><div class="table-scroll"><table><thead><tr><th style="width:5%">#</th><th style="width:58%">SKU</th><th style="width:18%;text-align:right">工单数</th><th style="width:19%;text-align:right">售后总数</th></tr></thead><tbody id="analysisSku"></tbody></table></div></div>
-</div>
-
 <!-- Tab: Detail -->
 <div class="tab-content" id="tab-detail">
   <div class="filter-bar">
@@ -346,6 +333,19 @@ tbody tr:hover{background:#f8f9ff}
       </table>
     </div>
   </div>
+</div>
+
+
+<!-- Tab: Analysis -->
+<div class="tab-content" id="tab-analysis">
+  <div class="filter-bar">
+    <label>日期:</label><input type="date" id="an-start">
+    <label>至</label><input type="date" id="an-end">
+    <label>SKU:</label><input type="text" id="an-sku" placeholder="搜索SKU...">
+    <button class="btn btn-outline" onclick="resetAnalysis()">🔄 重置</button>
+  </div>
+  <div class="data-table-wrap"><h3>一、标签分布 TOP30</h3><div class="table-scroll"><table><thead><tr><th style="width:5%">#</th><th style="width:60%">标签</th><th style="width:18%;text-align:right">工单数</th><th style="width:17%;text-align:right">占比</th></tr></thead><tbody id="analysisTag"></tbody></table></div></div>
+  <div class="data-table-wrap"><h3>二、售后数量 TOP30 SKU</h3><div class="table-scroll"><table><thead><tr><th style="width:5%">#</th><th style="width:58%">SKU</th><th style="width:18%;text-align:right">工单数</th><th style="width:19%;text-align:right">售后总数</th></tr></thead><tbody id="analysisSku"></tbody></table></div></div>
 </div>
 
 </div><!-- /main -->
