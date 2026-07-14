@@ -124,10 +124,10 @@ try {
         $totalOrders += [int]$s.oq
     }
     $now = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $autoVersion = "sync-" + (Get-Date).ToString("yyyyMMdd-HHmmss")
     $verJson = @{
-        version = "2026-07-14-v1"
+        version = $autoVersion
         generated_at = $now
-        updated = $now
         total_after_sale = $afterCount
         total_sales = $totalSales
         total_orders = $totalOrders
