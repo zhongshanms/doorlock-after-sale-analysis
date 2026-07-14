@@ -1803,18 +1803,22 @@ function clearDetailFilter(field) {
 }
 
 function _initAutocomplete() {
+  const _blurTimers = {};
   Object.values(_autocompleteCfg).forEach(cfg => {
     const inputEl = document.getElementById(cfg.inputId);
     const listEl = document.getElementById(cfg.listId);
     if (!inputEl || !listEl) return;
 
     // On focus: always show full list (input text is empty between selections)
-    inputEl.addEventListener('focus', () => _renderAutocompleteList(cfg, ''));
+    inputEl.addEventListener('focus', () => {
+      clearTimeout(_blurTimers[cfg.inputId]);
+      _renderAutocompleteList(cfg, '');
+    });
     // On input: filter dropdown items by typed text (search mode only)
     inputEl.addEventListener('input', () => _renderAutocompleteList(cfg, inputEl.value));
-    // On blur: clear search text and close dropdown
+    // On blur: clear search text and close dropdown after a short delay
     inputEl.addEventListener('blur', () => {
-      setTimeout(() => {
+      _blurTimers[cfg.inputId] = setTimeout(() => {
         listEl.classList.remove('show');
         inputEl.value = '';
       }, 150);
