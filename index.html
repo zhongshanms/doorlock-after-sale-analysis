@@ -90,6 +90,17 @@ input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2
 .filter-bar input,.filter-bar select{padding:6px 10px;font-size:var(--font-sm)}
 .filter-bar button{padding:7px 16px;font-size:var(--font-sm);border-radius:var(--radius-sm)}
 
+/* ========== Autocomplete Dropdown ========== */
+.autocomplete-wrap{position:relative;display:inline-block}
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;z-index:50;display:none;margin-top:2px;min-width:220px}
+.autocomplete-list.show{display:block}
+.autocomplete-item{padding:7px 12px;cursor:pointer;font-size:var(--font-sm);display:flex;justify-content:space-between;align-items:center;gap:12px;transition:background .15s;color:var(--text)}
+.autocomplete-item:hover,.autocomplete-item.active{background:rgba(26,115,232,.08)}
+.autocomplete-item .pct{color:var(--text-secondary);font-size:0.78rem;flex-shrink:0;font-weight:500}
+.autocomplete-item.empty{color:var(--text-secondary);text-align:center;padding:14px;cursor:default;display:block}
+.autocomplete-item.empty:hover{background:transparent}
+.autocomplete-item mark{background:rgba(245,154,35,.25);color:inherit;padding:0 1px;border-radius:2px}
+
 /* ========== Data Table ========== */
 .data-table-wrap{background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
 .data-table-wrap h3{padding:16px 20px;border-bottom:1px solid var(--border)}
@@ -317,8 +328,8 @@ tbody tr:hover{background:#f8f9ff}
     <label>日期:</label><input type="date" id="dt-start">
     <label>至</label><input type="date" id="dt-end">
     <label>SKU:</label><input type="text" id="dt-sku" placeholder="搜索SKU...">
-    <label>售后原因:</label><input type="text" id="dt-reason" placeholder="搜索售后原因...">
-    <label>标签:</label><input type="text" id="dt-tag" placeholder="搜索标签...">
+    <label>售后原因:</label><span class="autocomplete-wrap"><input type="text" id="dt-reason" placeholder="搜索售后原因..." autocomplete="off"><div class="autocomplete-list" id="dt-reason-list"></div></span>
+    <label>标签:</label><span class="autocomplete-wrap"><input type="text" id="dt-tag" placeholder="搜索标签..." autocomplete="off"><div class="autocomplete-list" id="dt-tag-list"></div></span>
     <label>状态:</label><select id="dt-status"><option value="">全部</option></select>
     <button class="btn btn-outline" onclick="resetDetail()">🔄 重置</button>
   </div>
@@ -1657,6 +1668,82 @@ function applyDetailWithParams() {
       <td>${r.return_qty}</td>
     </tr>
   `).join('');
+}
+
+// ========== AUTOCOMPLETE for reason/tag inputs ==========
+const _autocompleteCfg = {
+  reason: { inputId: 'dt-reason', listId: 'dt-reason-list', field: 'reason' },
+  tag:    { inputId: 'dt-tag',    listId: 'dt-tag-list',    field: 'tag'    }
+};
+
+function _countField(field) {
+  const counter = {};
+  for (const r of gAfterSale) {
+    const v = (r[field] || '').trim();
+    if (!v) continue;
+    counter[v] = (counter[v] || 0) + 1;
+  }
+  return counter;
+}
+
+function _renderAutocompleteList(cfg, term) {
+  const listEl = document.getElementById(cfg.listId);
+  if (!listEl) return;
+  const counter = _countField(cfg.field);
+  const total = gAfterSale.length || 1;
+  const lowerTerm = (term || '').toLowerCase();
+
+  let items = Object.entries(counter)
+    .filter(([k]) => !lowerTerm || k.toLowerCase().includes(lowerTerm))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30);
+
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="autocomplete-item empty">无匹配项</div>';
+  } else {
+    listEl.innerHTML = items.map(([val, cnt]) => {
+      const pct = (cnt / total * 100).toFixed(1);
+      const safe = String(val).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      const highlighted = lowerTerm
+        ? safe.replace(new RegExp(lowerTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => `<mark>${m}</mark>`)
+        : safe;
+      return `<div class="autocomplete-item" data-value="${safe}"><span class="label">${highlighted}</span><span class="pct">${pct}%</span></div>`;
+    }).join('');
+    listEl.querySelectorAll('.autocomplete-item:not(.empty)').forEach(item => {
+      item.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        const val = this.getAttribute('data-value');
+        document.getElementById(cfg.inputId).value = val;
+        listEl.classList.remove('show');
+        if (typeof applyDetail === 'function') applyDetail();
+      });
+    });
+  }
+  listEl.classList.add('show');
+}
+
+function _initAutocomplete() {
+  Object.values(_autocompleteCfg).forEach(cfg => {
+    const inputEl = document.getElementById(cfg.inputId);
+    const listEl = document.getElementById(cfg.listId);
+    if (!inputEl || !listEl) return;
+
+    inputEl.addEventListener('focus', () => _renderAutocompleteList(cfg, inputEl.value));
+    inputEl.addEventListener('input', () => _renderAutocompleteList(cfg, inputEl.value));
+    inputEl.addEventListener('blur', () => setTimeout(() => listEl.classList.remove('show'), 150));
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.autocomplete-wrap')) {
+      document.querySelectorAll('.autocomplete-list.show').forEach(el => el.classList.remove('show'));
+    }
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _initAutocomplete);
+} else {
+  _initAutocomplete();
 }
 
 // ========== DB STATUS ==========
