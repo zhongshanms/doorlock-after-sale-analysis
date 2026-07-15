@@ -1,4 +1,4 @@
-﻿﻿param(
+﻿﻿﻿param(
     [string]$SourceFile
 )
 
@@ -44,11 +44,27 @@ try {
 }
 
 if ($IsEncrypted) {
-    Write-Host "[检测] 文件被绿盾加密..."
-    Write-Host "解决方法：用记事本打开文件 → 另存为 → 覆盖原文件"
-    Write-Host ""
-    Read-Host "按回车退出"
-    exit 1
+    Write-Host "[检测] 文件被绿盾加密: $(Split-Path $SourceFile -Leaf)"
+    # Try fallback: project data folder
+    $ProjectData = Join-Path $PSScriptRoot "data\after-sale-data-compact.json"
+    if (Test-Path -LiteralPath $ProjectData) {
+        $FallbackLine = Get-Content -LiteralPath $ProjectData -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($FallbackLine -match '^\s*[\{\[]') {
+            Write-Host "[自动] 改用项目 data 目录中的未加密版本"
+            $SourceFile = $ProjectData
+            $IsEncrypted = $false
+        } else {
+            Write-Host "[X] 项目 data 目录中的文件也被加密，请先用记事本另存解密的文件"
+            Write-Host "    路径: $ProjectData"
+            Read-Host "按回车退出"
+            exit 1
+        }
+    } else {
+        Write-Host "[X] 项目 data 目录中未找到文件"
+        Write-Host "    请运行 convert_doorlock_to_compact.py 生成数据，或双击 BAT 不拖文件"
+        Read-Host "按回车退出"
+        exit 1
+    }
 }
 
 $Repo = "git@github.com:zhongshanms/doorlock-after-sale-analysis.git"

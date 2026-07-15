@@ -2286,7 +2286,13 @@ function downloadCompactJSON() {
   }
   try {
     var compact = buildCompactJSON();
-    var jsonStr = JSON.stringify(compact, null, 2);
+    var jsonStr = JSON.stringify(compact);
+    // Try File System Access API to save directly to chosen folder (unencrypted)
+    if (window.showSaveFilePicker) {
+      saveDirectCompactJSON(jsonStr);
+      return;
+    }
+    // Fallback: regular browser download (may go to desktop, which gets encrypted)
     var blob = new Blob([jsonStr], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -2296,10 +2302,37 @@ function downloadCompactJSON() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('✅ JSON 已导出，拖到 上传数据.bat 上传', 'success');
+    showToast('JSON 已导出到下载目录（如被绿盾加密，请复制到 data/ 目录后双击 BAT）');
   } catch(e) {
     showToast('导出失败: ' + e.message, 'error');
     console.error('downloadCompactJSON error:', e);
+  }
+}
+
+async function saveDirectCompactJSON(jsonStr) {
+  try {
+    // User picks a folder — suggest the project data/ directory
+    var fileHandle = await window.showSaveFilePicker({
+      suggestedName: 'after-sale-data-compact.json',
+      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+    });
+    var writable = await fileHandle.createWritable();
+    await writable.write(jsonStr);
+    await writable.close();
+    showToast('✅ 已保存（未加密），将文件放入 data/ 目录后双击 BAT 即可同步');
+  } catch(e) {
+    if (e.name === 'AbortError') return;
+    // Fall back to regular download
+    var blob = new Blob([jsonStr], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'after-sale-data-compact.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('JSON 已导出');
   }
 }
 </script>
