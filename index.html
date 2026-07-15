@@ -1005,7 +1005,9 @@ async function rebuildFromUploadDB(type) {
         };
       }
 
-      var key = JSON.stringify(Object.entries(normalized).sort((a,b) => a[0].localeCompare(b[0])).map(([k,v]) => [k, v === undefined ? '' : String(v)]));
+      // Use record ID (auto-increment from IndexedDB) in the dedup key so identical-looking rows
+      // (including fully-empty rows) are still treated as distinct entries.
+      var key = (rec.id || i) + ':' + JSON.stringify(Object.entries(normalized).sort((a,b) => a[0].localeCompare(b[0])).map(([k,v]) => [k, v === undefined ? '' : String(v)]));
       if (!seen.has(key)) {
         seen.add(key);
         result.push(normalized);
