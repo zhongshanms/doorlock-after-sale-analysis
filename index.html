@@ -277,7 +277,7 @@ tbody tr:hover{background:#f8f9ff}
   </div>
   <div class="stats-cards" id="overviewCards"></div>
   <div class="chart-section">
-    <h3>📊 订单量 vs 售后订单量趋势</h3>
+    <h3>📊 销量 vs 售后数量趋势</h3>
     <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
   </div>
   <div class="chart-section">
@@ -1362,14 +1362,14 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
   salesF.forEach(r => {
     let p = fmtPeriod(r.date_date, granularity);
     if (!groupMapSL[p]) groupMapSL[p] = 0;
-    groupMapSL[p] += (r.order_qty||0);
+    groupMapSL[p] += (r.sales_qty||0);
   });
 
   let periods = [...new Set([...Object.keys(groupMapAS), ...Object.keys(groupMapSL)])].sort();
 
   // Trend chart
   let salesVals = periods.map(p => groupMapSL[p]||0);
-  let afterVals = periods.map(p => (groupMapAS[p]||{}).count||0);
+  let afterVals = periods.map(p => (groupMapAS[p]||{}).returnQty||0);
   let afterRateVals = periods.map((p,i) => salesVals[i] > 0 ? (afterVals[i]/salesVals[i]*100).toFixed(1) : '0.0');
 
   destroyChart('chartTrend');
@@ -1380,17 +1380,17 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
       data: {
         labels: periods,
         datasets: [
-          // 订单量 — 柱状图（左，图例左侧）
+          // 销量 — 柱状图（左，图例左侧）
           {
-            label: '订单量',
+            label: '销量',
             data: salesVals,
             backgroundColor: 'rgba(78,121,167,0.8)',
             borderRadius: 4,
             order: 1,
           },
-          // 售后订单量 — 柱状图
+          // 售后数量 — 柱状图
           {
-            label: '售后订单量',
+            label: '售后数量',
             data: afterVals,
             backgroundColor: 'rgba(225,87,89,0.8)',
             borderRadius: 4,
@@ -1426,8 +1426,8 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
       plugins: [{
         id: 'afterRateLabels',
         afterDatasetsDraw(chart) {
-          // 在售后订单量柱状图上方标注售后率
-          let barMeta = chart.getDatasetMeta(1); // 售后订单量柱状图（索引 1）
+          // 在售后数量柱状图上方标注售后率
+          let barMeta = chart.getDatasetMeta(1); // 售后数量柱状图（索引 1）
           barMeta.data.forEach((bar, i) => {
             if (salesVals[i] > 0) {
               let rate = (afterVals[i] / salesVals[i] * 100).toFixed(1);
