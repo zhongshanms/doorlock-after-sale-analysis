@@ -973,33 +973,38 @@ async function rebuildFromUploadDB(type) {
     var result = [];
 
     for (var i = 0; i < records.length; i++) {
-      var row = records[i].data;
-      if (!row || !Array.isArray(row)) continue;
+      var rec = records[i];
+      var row = rec.data;
 
       if (type === 'after') {
-        if (row.length < 5) continue;
+        // Use named field lookups (resilient to column reordering or removed columns)
+        var r = rec.data;
+        if (!r || typeof r !== 'object') continue;
+        var skuVal = String(r['SKU'] || r.sku || r['Sku'] || '').trim();
+        if (!skuVal) continue;
         var normalized = {
-          after_sale_type: String(row[1] || ''),
-          sku: String(row[2] || ''),
-          reason: String(row[3] || ''),
-          refund_status: String(row[4] || ''),
-          return_qty: parseInt(row[5] || 1) || 1,
-          tag: String(row[6] || ''),
-          create_time: String(row[8] || ''),
-          create_date: String(row[8] || ''),
-          responsibility: String(row[3] || ''),
-          year: records[i].year || 0,
+          after_sale_type: String(r['售后类型'] || r.after_sale_type || r['After Sale Type'] || ''),
+          sku: skuVal,
+          reason: String(r['售后原因'] || r.reason || r['Reason'] || ''),
+          refund_status: String(r['退款状态'] || r.refund_status || r['Refund Status'] || ''),
+          return_qty: parseInt(r['售后数量'] || r.return_qty || r['退货数量'] || r['Return Qty'] || 1) || 1,
+          tag: String(r['标签'] || r['买家备注'] || r.tag || r['Tag'] || ''),
+          create_time: String(r['售后时间'] || r['创建时间'] || r.create_time || r['Create Date'] || ''),
+          create_date: String(r['售后时间'] || r['创建时间'] || r.create_date || r['Create Date'] || ''),
+          responsibility: String(r['责任方'] || r.responsibility || r['Responsibility'] || ''),
+          year: rec.year || 0,
         };
       } else {
-        if (row.length < 3) continue;
-        var d = String(row[0] || '');
-        var s = String(row[1] || '');
+        var r2 = rec.data;
+        if (!r2 || typeof r2 !== 'object') continue;
+        var d = String(r2['日期'] || r2['时间'] || r2.date || r2['Date'] || '');
+        var s = String(r2['SKU'] || r2.sku || '').trim();
         if (!d || !s) continue;
         var normalized = {
           date: d, date_date: d, sku: s,
-          sales_qty: parseInt(row[2] || 0) || 0,
-          order_qty: parseInt(row[3] || 1) || 1,
-          year: records[i].year || 0,
+          sales_qty: parseInt(r2['销量'] || r2.sales_qty || r2['Sales Qty'] || 0) || 0,
+          order_qty: parseInt(r2['订单量'] || r2.order_qty || r2['Order Qty'] || 1) || 1,
+          year: rec.year || 0,
         };
       }
 
@@ -1899,9 +1904,19 @@ function processUpload(file, type) {
       let wb = XLSX.read(e.target.result, {type:'array'});
       let sheet = wb.Sheets[wb.SheetNames[0]];
       let aoa = XLSX.utils.sheet_to_json(sheet, {header: 1});
-      let json = aoa.slice(1).filter(row => row && row.length > 0 && row.some(v => v !== undefined && v !== null && v !== ''));
+      let headers = (aoa[0] || []).map(h => String(h || '').trim());
+      // Convert each data row to a named object so column order changes don't break mapping
+      let json = aoa.slice(1)
+        .filter(row => row && row.length > 0 && row.some(v => v !== undefined && v !== null && v !== ''))
+        .map(row => {
+          let obj = {};
+          for (let c = 0; c < headers.length; c++) {
+            if (headers[c]) obj[headers[c]] = row[c];
+          }
+          return obj;
+        });
       let recordCount = json.length;
-      statusEl.textContent = `解析完成: ${recordCount} 条记录 (原始${aoa.length-1}行含表头)`;
+      statusEl.textContent = `解析完成: ${recordCount} 条记录 (${headers.length}列: ${headers.slice(0,8).join(', ')}...)`;
 
       let year = document.getElementById(type === 'after' ? 'yearAfter' : 'yearSales').value;
       let recType = type === 'after' ? '售后工单' : '销量数据';
