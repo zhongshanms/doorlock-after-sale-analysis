@@ -1,4 +1,4 @@
-﻿param(
+﻿﻿param(
     [string]$SourceFile
 )
 
@@ -10,13 +10,18 @@ Write-Host "============================================"
 Write-Host ""
 
 if (-not $SourceFile) {
+    # Priority: project data folder (non-encrypted) > desktop (may be 绿盾-encrypted)
+    $ProjectData = Join-Path $PSScriptRoot "data\after-sale-data-compact.json"
     $DesktopJson = Join-Path $env:USERPROFILE "Desktop\after-sale-data-compact.json"
-    if (Test-Path -LiteralPath $DesktopJson) {
+    if (Test-Path -LiteralPath $ProjectData) {
+        $SourceFile = $ProjectData
+        Write-Host "[提示] 未拖入文件，已自动定位项目 data 目录文件"
+    } elseif (Test-Path -LiteralPath $DesktopJson) {
         $SourceFile = $DesktopJson
         Write-Host "[提示] 未拖入文件，已自动定位桌面文件"
     } else {
         Write-Host "用法：把 after-sale-data-compact.json 拖到 上传数据.bat 上"
-        Write-Host "      或直接双击运行（脚本会自动查找桌面文件）"
+        Write-Host "      或直接双击运行（脚本会自动查找项目 data 目录或桌面文件）"
         Write-Host ""
         Read-Host "按回车退出"
         exit 1
