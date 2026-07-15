@@ -1518,20 +1518,17 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
     let note = (r.tag || '').trim();
     let resp = '客户'; // 默认客户
     let rl = reason.toLowerCase();
-    // 品控：质量/缺陷/描述不符/零件/尺寸/调包
+    // 品控：缺陷/质量/缺少零件
     if (rl.includes('缺陷') || rl.includes('defective') || rl.includes('质量') ||
-        rl.includes('描述不符') || rl.includes('not as described') ||
-        rl.includes('缺少零件') || rl.includes('missing parts') ||
-        rl.includes('尺寸') || rl.includes('too large') || rl.includes('too small') ||
-        rl.includes('调包') || rl.includes('switcheroo') || rl.includes('不合适') ||
-        rl.includes('poor fit') || rl.includes('没有编译')) {
+        rl.includes('缺少零件') || rl.includes('missing parts')) {
       resp = '品控';
     }
-    // 物流：运输/投递/送达
+    // 物流：运输/投递/送达/调包
     else if (rl.includes('无法投递') || rl.includes('undeliverable') ||
              rl.includes('运输') || rl.includes('damaged by carrier') ||
              rl.includes('预计时间') || rl.includes('missed estimated') ||
-             rl.includes('未送达') || rl.includes('never arriv')) {
+             rl.includes('未送达') || rl.includes('never arriv') ||
+             rl.includes('调包') || rl.includes('switcheroo')) {
       resp = '物流';
     }
     // 仓库：亚马逊仓库损坏
@@ -1542,11 +1539,13 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
     else if (rl.includes('停产') || rl.includes('下架') || rl.includes('晚发货') || rl.includes('延期')) {
       resp = '采购';
     }
-    // 运营：折扣
-    else if (rl.includes('折扣') || rl.includes('discount') || rl.includes('邀评')) {
+    // 运营：折扣/邀评/尺寸/描述不符
+    else if (rl.includes('折扣') || rl.includes('discount') || rl.includes('邀评') ||
+             rl.includes('尺寸') || rl.includes('too large') || rl.includes('too small') ||
+             rl.includes('描述不符') || rl.includes('not as described')) {
       resp = '运营';
     }
-    // 客户：默认，也包括不想要/误购/未提供原因/授权购买/更优惠
+    // 客户：默认，也包括不想要/误购/未提供原因/不合适/没有编译
     else {
       resp = '客户';
     }
