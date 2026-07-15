@@ -980,11 +980,9 @@ async function rebuildFromUploadDB(type) {
         // Use named field lookups (resilient to column reordering or removed columns)
         var r = rec.data;
         if (!r || typeof r !== 'object') continue;
-        var skuVal = String(r['SKU'] || r.sku || r['Sku'] || '').trim();
-        if (!skuVal) continue;
         var normalized = {
           after_sale_type: String(r['售后类型'] || r.after_sale_type || r['After Sale Type'] || ''),
-          sku: skuVal,
+          sku: String(r['SKU'] || r.sku || r['Sku'] || '').trim(),
           reason: String(r['售后原因'] || r.reason || r['Reason'] || ''),
           refund_status: String(r['退款状态'] || r.refund_status || r['Refund Status'] || ''),
           return_qty: parseInt(r['售后数量'] || r.return_qty || r['退货数量'] || r['Return Qty'] || 1) || 1,
@@ -997,11 +995,10 @@ async function rebuildFromUploadDB(type) {
       } else {
         var r2 = rec.data;
         if (!r2 || typeof r2 !== 'object') continue;
-        var d = String(r2['日期'] || r2['时间'] || r2.date || r2['Date'] || '');
-        var s = String(r2['SKU'] || r2.sku || '').trim();
-        if (!d || !s) continue;
         var normalized = {
-          date: d, date_date: d, sku: s,
+          date: String(r2['日期'] || r2['时间'] || r2.date || r2['Date'] || ''),
+          date_date: String(r2['日期'] || r2['时间'] || r2.date || r2['Date'] || ''),
+          sku: String(r2['SKU'] || r2.sku || '').trim(),
           sales_qty: parseInt(r2['销量'] || r2.sales_qty || r2['Sales Qty'] || 0) || 0,
           order_qty: parseInt(r2['订单量'] || r2.order_qty || r2['Order Qty'] || 1) || 1,
           year: rec.year || 0,
