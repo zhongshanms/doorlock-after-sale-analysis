@@ -593,8 +593,8 @@ async function loadData() {
     if (afterCount > 0 || salesCount > 0) {
       if (afterCount > 0) await rebuildFromUploadDB('after');
       if (salesCount > 0) await rebuildFromUploadDB('sales');
-      document.getElementById('status-after').textContent = '售后: ' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '包裹';
-      document.getElementById('status-sales').textContent = '销量: ' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '包裹';
+      document.getElementById('status-after').textContent = '售后: ' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + 'Pack';
+      document.getElementById('status-sales').textContent = '销量: ' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + 'Pack';
       updateDateRangeLabel();
       refreshOverview(); refreshCharts(); refreshAnalysis(); refreshDetail(); refreshDBStatus();
       debugLog('数据来源: UploadDB 用户上传数据 (售后=' + gAfterSale.length + ' 销量=' + gSales.length + ')', 'success');
@@ -1045,8 +1045,8 @@ async function initData(json) {
   await mergeUploadedData();
 
   // Update status
-  document.getElementById('status-after').textContent = `售后: ${fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0))}包裹`;
-  document.getElementById('status-sales').textContent = `销量: ${fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0))}包裹`;
+  document.getElementById('status-after').textContent = `售后: ${fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0))}Pack`;
+  document.getElementById('status-sales').textContent = `销量: ${fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0))}Pack`;
 
   // Set default date range (last 150 days)
   let allDates = [];
@@ -1960,8 +1960,8 @@ function processUpload(file, type) {
           debugLog('从 UploadDB 重建内存数据... (' + type + ')');
           await rebuildFromUploadDB(type);
           // Update status bar
-          document.getElementById('status-after').textContent = '售后: ' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '包裹';
-          document.getElementById('status-sales').textContent = '销量: ' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '包裹';
+          document.getElementById('status-after').textContent = '售后: ' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + 'Pack';
+          document.getElementById('status-sales').textContent = '销量: ' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + 'Pack';
           debugLog('状态栏已更新: 售后=' + gAfterSale.length + ' 销量=' + gSales.length, 'success');
           updateDateRangeLabel();
           refreshOverview();
