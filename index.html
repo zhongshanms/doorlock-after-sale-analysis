@@ -595,6 +595,7 @@ async function loadData() {
       if (salesCount > 0) await rebuildFromUploadDB('sales');
       document.getElementById('status-after').textContent = '售后：' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '-Pack';
       document.getElementById('status-sales').textContent = '销量：' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '-Pack';
+      setDefaultDateRange();
       updateDateRangeLabel();
       refreshOverview(); refreshCharts(); refreshAnalysis(); refreshDetail(); refreshDBStatus();
       debugLog('数据来源: UploadDB 用户上传数据 (售后=' + gAfterSale.length + ' 销量=' + gSales.length + ')', 'success');
@@ -1049,6 +1050,25 @@ async function initData(json) {
   document.getElementById('status-sales').textContent = `销量：${fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0))}-Pack`;
 
   // Set default date range (last 150 days)
+  setDefaultDateRange();
+
+  // Populate detail status dropdown
+  let statuses = [...new Set(gAfterSale.map(r => r.refund_status).filter(Boolean))];
+  let sel = document.getElementById('dt-status');
+  sel.innerHTML = '<option value="">全部</option>';
+  statuses.forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
+
+  // Refresh all tabs
+  refreshOverview();
+  refreshCharts();
+  refreshAnalysis();
+  refreshDetail();
+  refreshDBStatus();
+  updateDateRangeLabel();
+}
+
+// Set default date range (last 150 days) for all tab date pickers
+function setDefaultDateRange() {
   let allDates = [];
   gAfterSale.forEach(r => { if(r.create_date) allDates.push(r.create_date); });
   gSales.forEach(r => { if(r.date_date) allDates.push(r.date_date); });
@@ -1068,20 +1088,6 @@ async function initData(json) {
       }
     });
   }
-
-  // Populate detail status dropdown
-  let statuses = [...new Set(gAfterSale.map(r => r.refund_status).filter(Boolean))];
-  let sel = document.getElementById('dt-status');
-  sel.innerHTML = '<option value="">全部</option>';
-  statuses.forEach(s => { sel.innerHTML += `<option value="${s}">${s}</option>`; });
-
-  // Refresh all tabs
-  refreshOverview();
-  refreshCharts();
-  refreshAnalysis();
-  refreshDetail();
-  refreshDBStatus();
-  updateDateRangeLabel();
 }
 
 // 计算数据日期范围并更新标题旁的标注
