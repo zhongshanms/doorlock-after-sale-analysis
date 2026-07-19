@@ -428,7 +428,7 @@ function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
 function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : '0%'; }
 
 // ===== Debug Panel Helpers =====
-var APP_VERSION = '2026-07-14-v2'; // bump on each deploy to detect stale cache
+var APP_VERSION = '2026-07-19-v3'; // bump on each deploy to detect stale cache
 var UPLOAD_SCHEMA_VER = 'doorlock-v1'; // bump when field mapping changes → auto-clear UploadDB
 console.log('%c[APP] Version: ' + APP_VERSION, 'color:#4ec9b0;font-weight:bold');
 window.__debugLines = [];
@@ -1036,6 +1036,12 @@ async function rebuildFromUploadDB(type) {
 }
 
 async function initData(json) {
+  // 竞态保护：用户已上传数据，跳过预置JSON覆盖
+  if (sessionStorage.getItem('upload_active') === '1') {
+    console.log('[INIT] 跳过: 用户已上传数据');
+    debugLog('检测到用户已上传数据，跳过预置JSON加载', 'info');
+    return;
+  }
   json = expandCompact(json);
   gData = json;
   gAfterSale = json.after_sale_records || [];
@@ -1965,6 +1971,8 @@ function processUpload(file, type) {
           console.log('[UPLOAD] Calling rebuildFromUploadDB for type=' + type + '...');
           debugLog('从 UploadDB 重建内存数据... (' + type + ')');
           await rebuildFromUploadDB(type);
+          // 标记用户已上传，防止预置JSON覆盖
+          sessionStorage.setItem('upload_active', '1');
           // Update status bar
           document.getElementById('status-after').textContent = '售后：' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '-Pack';
           document.getElementById('status-sales').textContent = '销量：' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '-Pack';
@@ -2066,6 +2074,7 @@ async function resetUploadData() {
     // ── 步骤4: 写入重置标记 ──
     showToast('步骤4/5: 写入重置标记...', 'info');
     sessionStorage.setItem('data_reset_pending', '1');
+    sessionStorage.removeItem('upload_active');
     console.log('[RESET] Reset flag set in sessionStorage');
 
     // ── 步骤5: 清除 localStorage 元数据 ──
