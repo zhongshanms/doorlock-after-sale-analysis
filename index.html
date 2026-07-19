@@ -428,7 +428,7 @@ function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
 function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : '0%'; }
 
 // ===== Debug Panel Helpers =====
-var APP_VERSION = '2026-07-19-v3'; // bump on each deploy to detect stale cache
+var APP_VERSION = '2026-07-19-v4'; // bump on each deploy to detect stale cache
 var UPLOAD_SCHEMA_VER = 'doorlock-v1'; // bump when field mapping changes → auto-clear UploadDB
 console.log('%c[APP] Version: ' + APP_VERSION, 'color:#4ec9b0;font-weight:bold');
 window.__debugLines = [];
@@ -612,6 +612,26 @@ async function loadData() {
     if (vResp.ok) {
       let versionInfo = await vResp.json();
       let currentVersion = versionInfo.version || '';
+      // ── 版本号变化：同时清空 UploadDB 和 DataCache ──
+      let lastKnownVer = localStorage.getItem('last_data_version');
+      if (lastKnownVer && lastKnownVer !== currentVersion) {
+        try {
+          let uDB = getUploadDB();
+          let oldCount = await uDB.records.count();
+          await uDB.records.clear();
+          uDB.close();
+          uploadDB = null;
+          debugLog('版本变更(' + lastKnownVer + '→' + currentVersion + '): 已清空 UploadDB ' + oldCount + ' 条', 'warn');
+        } catch(e) { console.warn('UploadDB clear failed:', e); }
+        try {
+          let cDB = getDataCacheDB();
+          await cDB.cache.clear();
+          cDB.close();
+          dataCacheDB = null;
+        } catch(e) {}
+      }
+      localStorage.setItem('last_data_version', currentVersion);
+
       let db = getDataCacheDB();
       let cached = await db.cache.get('compact_data');
       if (cached && cached.version === currentVersion) {
