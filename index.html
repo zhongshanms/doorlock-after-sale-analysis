@@ -103,6 +103,7 @@ input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2
 .autocomplete-item mark{background:rgba(245,154,35,.25);color:inherit;padding:0 1px;border-radius:2px}
 .filter-chip{display:none;align-items:center;gap:4px;background:rgba(26,115,232,.12);color:var(--primary);border-radius:12px;padding:2px 6px 2px 10px;font-size:var(--font-sm);white-space:nowrap;max-width:200px}
 .filter-chip.show{display:inline-flex}
+.filter-chip.wps-style{padding:2px 4px;background:transparent}
 .filter-chip .chip-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filter-chip .chip-close{cursor:pointer;font-size:1rem;line-height:1;opacity:.6;flex-shrink:0}
 .filter-chip .chip-close:hover{opacity:1}
@@ -321,8 +322,8 @@ tbody tr:hover{background:#f8f9ff}
     <label>日期:</label><input type="date" id="dt-start">
     <label>至</label><input type="date" id="dt-end">
     <label>SKU:</label><input type="text" id="dt-sku" placeholder="搜索SKU...">
-    <label>售后原因:</label><span class="autocomplete-wrap"><input type="text" id="dt-reason" placeholder="选择售后原因..." autocomplete="off"><div class="autocomplete-list" id="dt-reason-list"></div></span><span class="filter-chip" id="dt-reason-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('reason')">×</span></span>
-    <label>标签:</label><span class="autocomplete-wrap"><input type="text" id="dt-tag" placeholder="选择标签..." autocomplete="off"><div class="autocomplete-list" id="dt-tag-list"></div></span><span class="filter-chip" id="dt-tag-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('tag')">×</span></span>
+    <label>售后原因:</label><span class="autocomplete-wrap"><input type="text" id="dt-reason" placeholder="选择售后原因..." autocomplete="off" readonly><div class="autocomplete-list" id="dt-reason-list"></div></span><span class="filter-chip" id="dt-reason-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('reason')">×</span></span>
+    <label>标签:</label><span class="autocomplete-wrap"><input type="text" id="dt-tag" placeholder="选择标签..." autocomplete="off" readonly><div class="autocomplete-list" id="dt-tag-list"></div></span><span class="filter-chip" id="dt-tag-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('tag')">×</span></span>
     <label>状态:</label><select id="dt-status"><option value="">全部</option></select>
     <button class="btn btn-outline" onclick="resetDetail()">🔄 重置</button>
   </div>
@@ -1790,9 +1791,10 @@ function _renderAutocompleteList(cfg, term) {
         gDetailFilter[cfg.field] = filterVal;
         // Show chip
         _updateFilterChip(cfg);
-        // Clear input text so next focus shows full list
-        document.getElementById(cfg.inputId).value = '';
+        // WPS-style: show value in readonly input, then close dropdown + blur
+        document.getElementById(cfg.inputId).value = filterVal;
         listEl.classList.remove('show');
+        document.getElementById(cfg.inputId).blur();
         if (typeof applyDetail === 'function') applyDetail();
       });
     });
@@ -1804,18 +1806,24 @@ function _updateFilterChip(cfg) {
   const chipEl = document.getElementById(cfg.chipId);
   if (!chipEl) return;
   const val = gDetailFilter[cfg.field];
+  const textEl = chipEl.querySelector('.chip-text');
   if (val) {
-    chipEl.querySelector('.chip-text').textContent = val;
-    chipEl.classList.add('show');
+    chipEl.classList.add('show', 'wps-style');
+    if (textEl) textEl.style.display = 'none';
   } else {
-    chipEl.classList.remove('show');
+    chipEl.classList.remove('show', 'wps-style');
+    if (textEl) textEl.style.display = '';
   }
 }
 
 function clearDetailFilter(field) {
   gDetailFilter[field] = '';
   const cfg = Object.values(_autocompleteCfg).find(c => c.field === field);
-  if (cfg) _updateFilterChip(cfg);
+  if (cfg) {
+    _updateFilterChip(cfg);
+    const inputEl = document.getElementById(cfg.inputId);
+    if (inputEl) inputEl.value = '';
+  }
   if (typeof applyDetail === 'function') applyDetail();
 }
 
@@ -1837,7 +1845,7 @@ function _initAutocomplete() {
     inputEl.addEventListener('blur', () => {
       _blurTimers[cfg.inputId] = setTimeout(() => {
         listEl.classList.remove('show');
-        inputEl.value = '';
+        // WPS-style: keep value visible in readonly input
       }, 150);
     });
   });
