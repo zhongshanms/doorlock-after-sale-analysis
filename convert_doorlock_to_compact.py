@@ -12,9 +12,47 @@ except ImportError:
     import openpyxl
 
 
-# ── 文件路径 ──
-AFTERSALE_FILE = r"C:\Users\DELL\Desktop\亚马逊门锁售后工单2025-01-01~2026-07-05.xlsx"
-SALES_FILE = r"C:\Users\DELL\Desktop\亚马逊门锁销量统计2025-01-01~2026-07-05.xlsx"
+# ── 文件路径：自动发现桌面最新 Excel 文件，或通过命令行参数指定 ──
+import glob as _glob
+
+def _find_latest(desktop, pattern):
+    """返回桌面匹配 pattern 的最新文件"""
+    files = _glob.glob(os.path.join(desktop, pattern))
+    if not files:
+        return None
+    return max(files, key=os.path.getmtime)
+
+DESKTOP = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
+
+# 检测输入模式：单文件合并 vs 双文件分离
+MERGED_FILE = None
+if len(sys.argv) > 1 and sys.argv[1].lower().endswith(('.xlsx', '.xls')):
+    # 探测是否为合并文件（含"售后明细"sheet）
+    _wb = openpyxl.load_workbook(sys.argv[1], data_only=True, read_only=True)
+    if "售后明细" in _wb.sheetnames:
+        MERGED_FILE = sys.argv[1]
+    _wb.close()
+
+if MERGED_FILE:
+    AFTERSALE_FILE = SALES_FILE = MERGED_FILE
+    INPUT_MODE = "merged"
+    print(f"[合并模式] 读取: {MERGED_FILE}")
+else:
+    AFTERSALE_FILE = (
+        sys.argv[1] if len(sys.argv) > 1 and not MERGED_FILE and not sys.argv[1].lower().endswith(('.xlsx', '.xls')) else
+        _find_latest(DESKTOP, "亚马逊门锁售后工单*.xlsx")
+    )
+    SALES_FILE = (
+        _find_latest(DESKTOP, "亚马逊门锁销量统计*.xlsx")
+    )
+    INPUT_MODE = "split"
+    if not AFTERSALE_FILE or not os.path.exists(AFTERSALE_FILE):
+        print("[X] 未找到售后工单文件，请在桌面放置 '亚马逊门锁售后工单*.xlsx' 或拖入 xlsx 到 一键更新.bat")
+        sys.exit(1)
+    if not SALES_FILE or not os.path.exists(SALES_FILE):
+        print("[X] 未找到销量统计文件，请在桌面放置 '亚马逊门锁销量统计*.xlsx'")
+        sys.exit(1)
+
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "data")
 COMPACT_FILE = os.path.join(OUTPUT_DIR, "after-sale-data-compact.json")
 VERSION_FILE = os.path.join(OUTPUT_DIR, "version.json")
@@ -86,10 +124,10 @@ def classify_responsibility(reason, buyer_note=""):
 
 
 # ── 读取 Excel ──
-def read_excel(filepath):
-    print(f"读取: {filepath}")
+def read_excel(filepath, sheet_name=None):
+    print(f"读取: {filepath}" + (f" [sheet={sheet_name}]" if sheet_name else ""))
     wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
-    ws = wb.active
+    ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb.active
     headers = [cell.value for cell in ws[1]]
     rows = []
     for row in ws.iter_rows(min_row=2, values_only=True):
@@ -105,9 +143,13 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # 1. 读取售后数据
-    ah, ar_rows = read_excel(AFTERSALE_FILE)
-    # 列映射: 0:订单号 1:店铺 2:国家 3:SKU 4:售后数量 5:售后类型 6:售后时间 7:订购时间 8:售后原因 9:买家备注
+    ar_sheet = "售后明细" if INPUT_MODE == "merged" else None
+    ah, ar_rows = read_excel(AFTERSALE_FILE, ar_sheet)
+    # 列映射 - 兼容两种格式
+    # 完整格式: 订单号、店铺、国家、SKU、售后数量、售后类型、售后时间、订购时间、售后原因、买家备注
+    # 精简格式: SKU、售后数量、售后类型、售后时间、订购时间、售后原因、买家备注
     col_map = {h: i for i, h in enumerate(ah)}
+    is_compact = "订单号" not in col_map  # 精简格式无订单号列
 
     after_sale_records = []
     type_counter = Counter()
@@ -117,7 +159,7 @@ def main():
 
     print("转换售后数据...")
     for row in ar_rows:
-        tid = str(row[col_map["订单号"]]).strip() if row[col_map["订单号"]] else ""
+        tid = str(row[col_map["订单号"]]).strip() if not is_compact and row[col_map["订单号"]] else ""
         sku_val = str(row[col_map["SKU"]]).strip() if row[col_map["SKU"]] else ""
         if not sku_val or not sku_val.startswith("MS"):
             continue
@@ -179,7 +221,8 @@ def main():
     print(f"  责任方: {dict(resp_counter)}")
 
     # 2. 读取销量数据
-    sh, sr_rows = read_excel(SALES_FILE)
+    sr_sheet = "销量明细" if INPUT_MODE == "merged" else None
+    sh, sr_rows = read_excel(SALES_FILE, sr_sheet)
     # 列映射: 0:时间 1:SKU 2:销量 3:订单量
     s_col_map = {h: i for i, h in enumerate(sh)}
 
@@ -261,7 +304,7 @@ def main():
 
     # 5. 生成 version.json
     version_data = {
-        "version": "2026-07-14-v1",
+        "version": datetime.now().strftime("%Y-%m-%d-v") + "1",
         "generated_at": compact["m"]["generated_at"],
         "total_after_sale": len(after_sale_records),
         "total_sales": total_sales,

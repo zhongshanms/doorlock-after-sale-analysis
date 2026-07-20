@@ -259,8 +259,8 @@ tbody tr:hover{background:#f8f9ff}
     </div>
     <div class="mt-16 text-center" style="border-top:1px dashed #e0e0e0;padding-top:16px;display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">
       <button class="btn btn-outline" onclick="resetUploadData()" style="color:#e15759;border-color:#e15759">🗑️ 清空全部数据</button>
-      <button class="btn btn-outline" onclick="downloadCompactJSON()" style="border:1px solid var(--border);background:#fff;color:var(--text);padding:8px 18px;border-radius:var(--radius-sm);font-size:var(--font-sm)">⬇️ 导出 JSON</button>
-      <span class="text-muted" style="font-size:var(--font-sm)">导出后拖到 上传数据.bat 上传</span>
+      <button class="btn btn-outline" onclick="downloadCompactExcel()" style="border:1px solid var(--border);background:#fff;color:var(--text);padding:8px 18px;border-radius:var(--radius-sm);font-size:var(--font-sm)">⬇️ 导出 Excel</button>
+      <span class="text-muted" style="font-size:var(--font-sm)">导出后拖到 一键更新.bat 上传</span>
     </div>
   </div>
   <div class="debug-panel-toggle" id="debugToggle" onclick="toggleDebug()" style="display:none">🔧 显示诊断日志</div>
@@ -2323,60 +2323,70 @@ function buildCompactJSON() {
   };
 }
 
-function downloadCompactJSON() {
+function downloadCompactExcel() {
   if (gAfterSale.length === 0 && gSales.length === 0) {
     showToast('没有数据可导出，请先上传数据', 'warning');
     return;
   }
   try {
-    var compact = buildCompactJSON();
-    var jsonStr = JSON.stringify(compact);
+    // 售后明细 sheet
+    var arData = gAfterSale.map(function(r) {
+      return {
+        'SKU': r.sku || '',
+        '售后类型': r.after_sale_type || '',
+        '售后数量': r.return_qty || 0,
+        '售后时间': r.create_time || r.create_date || '',
+        '售后原因': r.reason || '',
+        '买家备注': r.tag || '',
+        '责任方': r.responsibility || '',
+      };
+    });
+    // 销量明细 sheet
+    var srData = gSales.map(function(r) {
+      return {
+        '时间': r.date || r.date_date || '',
+        'SKU': r.sku || '',
+        '销量': r.sales_qty || 0,
+        '订单量': r.order_qty || 0,
+      };
+    });
+
+    var wb = XLSX.utils.book_new();
+    var ws1 = XLSX.utils.json_to_sheet(arData);
+    var ws2 = XLSX.utils.json_to_sheet(srData);
+    XLSX.utils.book_append_sheet(wb, ws1, '售后明细');
+    XLSX.utils.book_append_sheet(wb, ws2, '销量明细');
+
+    var fname = '亚马逊门锁售后数据_合并.xlsx';
     // Try File System Access API to save directly to chosen folder (unencrypted)
     if (window.showSaveFilePicker) {
-      saveDirectCompactJSON(jsonStr);
+      saveDirectCompactExcel(wb, fname);
       return;
     }
-    // Fallback: regular browser download (may go to desktop, which gets encrypted)
-    var blob = new Blob([jsonStr], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'after-sale-data-compact.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('JSON 已导出到下载目录（如被绿盾加密，请复制到 data/ 目录后双击 BAT）');
+    // Fallback: regular browser download
+    XLSX.writeFile(wb, fname);
+    showToast('Excel 已导出，拖到 一键更新.bat 即可同步到所有设备');
   } catch(e) {
     showToast('导出失败: ' + e.message, 'error');
-    console.error('downloadCompactJSON error:', e);
+    console.error('downloadCompactExcel error:', e);
   }
 }
 
-async function saveDirectCompactJSON(jsonStr) {
+async function saveDirectCompactExcel(wb, fname) {
   try {
-    // User picks a folder — suggest the project data/ directory
     var fileHandle = await window.showSaveFilePicker({
-      suggestedName: 'after-sale-data-compact.json',
-      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+      suggestedName: fname,
+      types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
     });
     var writable = await fileHandle.createWritable();
-    await writable.write(jsonStr);
+    var buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    await writable.write(buf);
     await writable.close();
-    showToast('✅ 已保存（未加密），将文件放入 data/ 目录后双击 BAT 即可同步');
+    showToast('✅ Excel 已保存，拖到 一键更新.bat 即可同步到所有设备');
   } catch(e) {
     if (e.name === 'AbortError') return;
-    // Fall back to regular download
-    var blob = new Blob([jsonStr], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'after-sale-data-compact.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('JSON 已导出');
+    XLSX.writeFile(wb, fname);
+    showToast('Excel 已导出（默认下载目录）');
   }
 }
 </script>
