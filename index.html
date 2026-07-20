@@ -429,7 +429,7 @@ function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
 function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : '0%'; }
 
 // ===== Debug Panel Helpers =====
-var APP_VERSION = '2026-07-19-v4'; // bump on each deploy to detect stale cache
+var APP_VERSION = '2026-07-20-v5'; // bump on each deploy to detect stale cache
 var UPLOAD_SCHEMA_VER = 'doorlock-v1'; // bump when field mapping changes → auto-clear UploadDB
 console.log('%c[APP] Version: ' + APP_VERSION, 'color:#4ec9b0;font-weight:bold');
 window.__debugLines = [];
@@ -608,7 +608,7 @@ async function loadData() {
 
   // ── Check IndexedDB cache first (instant load on repeat visits) ──
   try {
-    let versionUrl = './data/version.json';
+    let versionUrl = './data/version.json?v=' + APP_VERSION;
     let vResp = await fetch(versionUrl, {cache: 'no-store'});
     if (vResp.ok) {
       let versionInfo = await vResp.json();
@@ -681,7 +681,7 @@ async function loadData() {
 
 // Background: fetch latest version and update cache if needed
 function checkVersionInBackground(currentData) {
-  let versionUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '') + '/data/version.json';
+  let versionUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '') + '/data/version.json?v=' + APP_VERSION;
   fetch(versionUrl, {cache: 'no-store'}).then(function(resp) {
     if (!resp.ok) return;
     return resp.json();
@@ -702,7 +702,7 @@ function cacheDataInBackground(json) {
   try {
     let rawJson = JSON.stringify(json);
     // Get version info for cache key
-    let versionUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '') + '/data/version.json';
+    let versionUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '') + '/data/version.json?v=' + APP_VERSION;
     fetch(versionUrl, {cache: 'no-store'}).then(function(resp) {
       if (resp.ok) return resp.json();
       return {};
@@ -2262,7 +2262,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Auto-refresh check every 5 minutes
     setInterval(function() {
       try {
-        fetch('https://raw.githubusercontent.com/zhongshanms/doorlock-after-sale-analysis/main/data/version.json', {cache: 'no-store'}).then(function(resp) {
+        fetch('https://raw.githubusercontent.com/zhongshanms/doorlock-after-sale-analysis/main/data/version.json?v=' + APP_VERSION, {cache: 'no-store'}).then(function(resp) {
           if (resp.ok) {
             resp.json().then(function(v) {
               let local = localStorage.getItem(STORAGE_CLOUD_KEY);
