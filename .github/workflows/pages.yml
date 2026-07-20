@@ -32,3 +32,19 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  sync-bt:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync to BT Server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.BT_SSH_HOST }}
+          port: ${{ secrets.BT_SSH_PORT }}
+          username: ${{ secrets.BT_SSH_USER }}
+          key: ${{ secrets.BT_SSH_KEY }}
+          script: |
+            cd /www/wwwroot/doorlock.zhongshanzhiliang.top
+            git fetch origin main
+            git reset --hard FETCH_HEAD
