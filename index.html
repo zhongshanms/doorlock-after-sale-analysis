@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>亚马逊门锁售后分析系统</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.4/dist/dexie.min.js"></script>
@@ -429,7 +432,7 @@ function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
 function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : '0%'; }
 
 // ===== Debug Panel Helpers =====
-var APP_VERSION = '2026-07-20-v5'; // bump on each deploy to detect stale cache
+var APP_VERSION = '2026-07-20-v6'; // bump on each deploy to detect stale cache
 var UPLOAD_SCHEMA_VER = 'doorlock-v1'; // bump when field mapping changes → auto-clear UploadDB
 console.log('%c[APP] Version: ' + APP_VERSION, 'color:#4ec9b0;font-weight:bold');
 window.__debugLines = [];
@@ -555,10 +558,11 @@ function showUploadTab(show) {
 // ========== DATA LOADING ==========
 
 // Fetch with timeout helper
-function fetchWithTimeout(url, timeoutMs) {
+function fetchWithTimeout(url, timeoutMs, options) {
+  options = options || {};
   return new Promise(function(resolve, reject) {
     let timer = setTimeout(function() { reject(new Error('请求超时 (' + timeoutMs/1000 + 's)')); }, timeoutMs);
-    fetch(url).then(function(resp) {
+    fetch(url, options).then(function(resp) {
       clearTimeout(timer);
       resolve(resp);
     }).catch(function(err) {
@@ -653,7 +657,7 @@ async function loadData() {
   try {
     if (detailEl) detailEl.textContent = '正在下载数据...';
     let dataUrl = './data/after-sale-data-compact.json?v=' + APP_VERSION;
-    let resp = await fetchWithTimeout(dataUrl, 30000);
+    let resp = await fetchWithTimeout(dataUrl, 30000, {cache: 'no-store'});
     if (resp.ok) {
       if (detailEl) detailEl.textContent = '正在解析数据...';
       let json = await resp.json();
