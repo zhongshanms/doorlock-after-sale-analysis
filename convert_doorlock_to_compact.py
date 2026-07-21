@@ -304,7 +304,7 @@ def main():
 
     # 5. 生成 version.json
     version_data = {
-        "version": datetime.now().strftime("%Y-%m-%d-%H%M%S"),
+        "version": datetime.now().strftime("%Y-%m-%d-v") + "1",
         "generated_at": compact["m"]["generated_at"],
         "total_after_sale": len(after_sale_records),
         "total_sales": total_sales,
