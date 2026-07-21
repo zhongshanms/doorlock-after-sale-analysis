@@ -87,6 +87,23 @@ input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2
 .chart-legend .legend-value{font-weight:600;color:var(--text);white-space:nowrap}
 .chart-legend .legend-pct{color:var(--text-secondary);font-size:0.78rem;min-width:42px;text-align:right}
 
+/* ========== 责任方匹配逻辑 ========== */
+.resp-logic-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.resp-party{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;border-top:3px solid #ccc}
+.resp-party .party-name{font-weight:600;font-size:var(--font-md);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.resp-party .party-name::before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.resp-party.qc{border-top-color:#e74c3c}.resp-party.qc .party-name::before{background:#e74c3c}
+.resp-party.wh{border-top-color:#f39c12}.resp-party.wh .party-name::before{background:#f39c12}
+.resp-party.log{border-top-color:#3498db}.resp-party.log .party-name::before{background:#3498db}
+.resp-party.cust{border-top-color:#27ae60}.resp-party.cust .party-name::before{background:#27ae60}
+.resp-party.pur{border-top-color:#9b59b6}.resp-party.pur .party-name::before{background:#9b59b6}
+.resp-party.ops{border-top-color:#e67e22}.resp-party.ops .party-name::before{background:#e67e22}
+.resp-party .kw-list{display:flex;flex-wrap:wrap;gap:4px 6px}
+.resp-party .kw-tag{display:inline-block;padding:2px 8px;background:var(--bg);border-radius:10px;font-size:0.78rem;color:var(--text);line-height:1.5}
+.resp-party .kw-default{display:inline-block;padding:2px 8px;background:#e8f5e9;border-radius:10px;font-size:0.78rem;color:#2e7d32;line-height:1.5;font-weight:600}
+@media(max-width:768px){.resp-logic-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:480px){.resp-logic-grid{grid-template-columns:repeat(2,1fr)}}
+
 /* ========== Filter Bar ========== */
 .filter-bar{background:var(--card-bg);border-radius:var(--radius);padding:14px 18px;box-shadow:var(--shadow);margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:10px}
 .filter-bar label{font-size:var(--font-sm);font-weight:500;white-space:nowrap}
@@ -316,6 +333,17 @@ tbody tr:hover{background:#f8f9ff}
     <div class="chart-box"><h4>② 售后数量趋势</h4><canvas id="chart2"></canvas></div>
     <div class="chart-box"><h4>③ 售后原因 TOP10</h4><canvas id="chart4"></canvas></div>
     <div class="chart-box"><h4>④ 责任方工单分布</h4><div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div class="chart-wrap" style="flex:1;min-width:220px"><canvas id="chart5"></canvas></div><div id="legend-chart5" class="chart-legend"></div></div></div>
+    <div class="chart-box" style="grid-column:1/-1">
+      <h4>⑤ 责任方匹配逻辑</h4>
+      <div class="resp-logic-grid">
+        <div class="resp-party qc"><div class="party-name">品控</div><div class="kw-list"><span class="kw-tag">缺陷</span><span class="kw-tag">defective</span><span class="kw-tag">质量不可接受</span><span class="kw-tag">quality unacceptable</span><span class="kw-tag">缺少零件</span><span class="kw-tag">missing parts</span><span class="kw-tag">图物不符</span><span class="kw-tag">颜色不对</span><span class="kw-tag">颜色不匹配</span><span class="kw-tag">不如预期</span><span class="kw-tag">wrong item</span><span class="kw-tag">发错</span><span class="kw-tag">poor fit</span><span class="kw-tag">质量差</span></div></div>
+        <div class="resp-party wh"><div class="party-name">仓库</div><div class="kw-list"><span class="kw-tag">物流中心损坏</span><span class="kw-tag">damaged by fc</span><span class="kw-tag">fc</span></div></div>
+        <div class="resp-party log"><div class="party-name">物流</div><div class="kw-list"><span class="kw-tag">无法投递</span><span class="kw-tag">undeliverable</span><span class="kw-tag">运输途中损坏</span><span class="kw-tag">damaged by carrier</span><span class="kw-tag">未在预计时间内送达</span><span class="kw-tag">missed estimated delivery</span><span class="kw-tag">never arriv</span><span class="kw-tag">未送达</span><span class="kw-tag">调包</span><span class="kw-tag">switcheroo</span></div></div>
+        <div class="resp-party cust"><div class="party-name">客户</div><div class="kw-list"><span class="kw-tag">不想要</span><span class="kw-tag">unwanted</span><span class="kw-tag">无意购买</span><span class="kw-tag">订购了错误</span><span class="kw-tag">ordered wrong</span><span class="kw-tag">误购</span><span class="kw-tag">misordered</span><span class="kw-tag">未提供原因</span><span class="kw-tag">no reason given</span><span class="kw-tag">找到更优惠</span><span class="kw-tag">better price</span><span class="kw-tag">未经授权</span><span class="kw-tag">unauthorized</span><span class="kw-tag">改变主意</span><span class="kw-tag">不需要</span><span class="kw-tag">不再需要</span><span class="kw-tag">不喜欢</span><span class="kw-tag">没有必要</span><span class="kw-tag">购买太多</span><span class="kw-tag">订了太多</span><span class="kw-tag">不合适</span><span class="kw-tag">太小</span><span class="kw-tag">太大</span><span class="kw-default">默认兜底</span></div></div>
+        <div class="resp-party pur"><div class="party-name">采购</div><div class="kw-list"><span class="kw-tag">停产</span><span class="kw-tag">下架</span><span class="kw-tag">不可售</span><span class="kw-tag">晚发货</span><span class="kw-tag">延期</span></div></div>
+        <div class="resp-party ops"><div class="party-name">运营</div><div class="kw-list"><span class="kw-tag">折扣</span><span class="kw-tag">discount</span><span class="kw-tag">tp邀评</span><span class="kw-tag">尺寸过大</span><span class="kw-tag">尺寸过小</span><span class="kw-tag">too large</span><span class="kw-tag">too small</span><span class="kw-tag">与描述不符</span><span class="kw-tag">not as described</span></div></div>
+      </div>
+    </div>
   </div>
 </div>
 
