@@ -70,7 +70,7 @@ def classify_responsibility(reason, buyer_note=""):
         "缺少零件", "missing parts",
         "图物不符", "颜色不对", "颜色不匹配",
         "不如预期", "wrong item", "发错",
-        "poor fit", "不合适", "质量差", "太小", "太大",
+        "poor fit", "质量差",
     ]
     for kw in qc_keywords:
         if kw in reason_lower or kw in note_lower:
@@ -100,7 +100,7 @@ def classify_responsibility(reason, buyer_note=""):
         "误购", "misordered", "未提供原因", "no reason given",
         "找到更优惠", "better price", "未经授权", "unauthorized",
         "改变主意", "不需要", "不再需要", "不喜欢", "没有必要",
-        "购买太多", "订了太多",
+        "购买太多", "订了太多", "不合适", "太小", "太大",
     ]
     for kw in cust_keywords:
         if kw in reason_lower or kw in note_lower:
