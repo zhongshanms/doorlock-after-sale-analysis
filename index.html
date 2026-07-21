@@ -1555,11 +1555,12 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
     let note = (r.tag || '').trim();
     let resp = '客户'; // 默认客户
     let rl = reason.toLowerCase();
-    // 品控：缺陷/质量/缺少零件/图物不符/颜色不对/发错/不如预期
-    if (rl.includes('缺陷') || rl.includes('defective') || rl.includes('质量') ||
+    // 品控：缺陷/质量/缺少零件/图物不符/颜色不对/发错/不如预期/不合适/质量差/太小/太大
+    if (rl.includes('缺陷') || rl.includes('defective') || rl.includes('质量不可接受') ||
         rl.includes('缺少零件') || rl.includes('missing parts') ||
         rl.includes('图物不符') || rl.includes('颜色') || rl.includes('发错') || rl.includes('wrong item') ||
-        rl.includes('不如预期')) {
+        rl.includes('不如预期') || rl.includes('不合适') || rl.includes('poor fit') ||
+        rl.includes('质量差') || rl.includes('太小') || rl.includes('太大')) {
       resp = '品控';
     }
     // 物流：运输/投递/送达/调包

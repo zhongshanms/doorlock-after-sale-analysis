@@ -67,10 +67,10 @@ def classify_responsibility(reason, buyer_note=""):
     # 品控 - 产品质量/缺陷问题
     qc_keywords = [
         "缺陷", "defective", "质量不可接受", "quality unacceptable",
-        "缺少零件", "missing parts", "与描述不符", "not as described",
-        "调包", "switcheroo", "尺寸过大", "尺寸过小", "too large", "too small",
-        "poor fit", "不合适", "图物不符", "颜色不对", "颜色不匹配",
-        "不如预期", "质量差", "太小", "太大", "wrong item", "发错",
+        "缺少零件", "missing parts",
+        "图物不符", "颜色不对", "颜色不匹配",
+        "不如预期", "wrong item", "发错",
+        "poor fit", "不合适", "质量差", "太小", "太大",
     ]
     for kw in qc_keywords:
         if kw in reason_lower or kw in note_lower:
@@ -88,7 +88,7 @@ def classify_responsibility(reason, buyer_note=""):
     log_keywords = [
         "无法投递", "undeliverable", "运输途中损坏", "damaged by carrier",
         "未在预计时间内送达", "missed estimated delivery", "never arriv",
-        "未送达",
+        "未送达", "调包", "switcheroo",
     ]
     for kw in log_keywords:
         if kw in reason_lower:
@@ -115,7 +115,7 @@ def classify_responsibility(reason, buyer_note=""):
             return "采购"
 
     # 运营
-    ops_keywords = ["折扣", "discount", "tp邀评"]
+    ops_keywords = ["折扣", "discount", "tp邀评", "尺寸过大", "尺寸过小", "too large", "too small", "与描述不符", "not as described"]
     for kw in ops_keywords:
         if kw in reason_lower or kw in note_lower:
             return "运营"
