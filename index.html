@@ -1136,7 +1136,7 @@ function setDefaultDateRange() {
     let maxDate = allDates[allDates.length-1];
     let endD = parseDate(maxDate);
     let startD = new Date(endD);
-    startD.setDate(startD.getDate() - 150);
+    startD.setMonth(startD.getMonth() - 6);
 
     let elements = ['ov-start','ov-end','ch-start','ch-end','an-start','an-end','dt-start','dt-end'];
     elements.forEach(id => {
