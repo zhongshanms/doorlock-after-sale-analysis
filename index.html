@@ -1576,47 +1576,29 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
   let rl = Object.keys(reasonMap).sort((a,b) => reasonMap[b]-reasonMap[a]).slice(0,10);
   makeHorizontalBar('chart4', rl, rl.map(r => reasonMap[r]), '工单数');
 
-  // Chart 5: 责任方分布（环形图）— 基于售后原因关键词分类
+  // Chart 5: 责任方分布（环形图）— 与 Python convert_doorlock_to_compact.py 完全一致
   let respMap = {};
   afterF.forEach(r => {
     let reason = (r.reason || '').trim();
     let note = (r.tag || '').trim();
-    let resp = '客户'; // 默认客户
     let rl = reason.toLowerCase();
-    // 品控：缺陷/质量/缺少零件/图物不符/颜色不对/发错/不如预期/poor fit/质量差
-    if (rl.includes('缺陷') || rl.includes('defective') || rl.includes('质量不可接受') ||
-        rl.includes('缺少零件') || rl.includes('missing parts') ||
-        rl.includes('图物不符') || rl.includes('颜色') || rl.includes('发错') || rl.includes('wrong item') ||
-        rl.includes('不如预期') || rl.includes('poor fit') ||
-        rl.includes('质量差')) {
-      resp = '品控';
-    }
-    // 物流：运输/投递/送达/调包
-    else if (rl.includes('无法投递') || rl.includes('undeliverable') ||
-             rl.includes('运输') || rl.includes('damaged by carrier') ||
-             rl.includes('预计时间') || rl.includes('missed estimated') ||
-             rl.includes('未送达') || rl.includes('never arriv') ||
-             rl.includes('调包') || rl.includes('switcheroo')) {
-      resp = '物流';
-    }
-    // 仓库：亚马逊仓库损坏
-    else if (rl.includes('物流中心损坏') || rl.includes('damaged by fc')) {
-      resp = '仓库';
-    }
-    // 采购：停产/下架/晚发货
-    else if (rl.includes('停产') || rl.includes('下架') || rl.includes('晚发货') || rl.includes('延期')) {
-      resp = '采购';
-    }
-    // 运营：折扣/邀评/尺寸/描述不符
-    else if (rl.includes('折扣') || rl.includes('discount') || rl.includes('邀评') ||
-             rl.includes('尺寸') || rl.includes('too large') || rl.includes('too small') ||
-             rl.includes('描述不符') || rl.includes('not as described')) {
-      resp = '运营';
-    }
-    // 客户：默认，也包括不想要/误购/未提供原因/不合适/没有编译
-    else {
-      resp = '客户';
-    }
+    let nl = note.toLowerCase();
+    let resp = '客户'; // 默认客户
+
+    // 品控（匹配 reason + note）
+    const qc = ['缺陷','defective','质量不可接受','quality unacceptable','缺少零件','missing parts','图物不符','颜色不对','颜色不匹配','不如预期','wrong item','发错','poor fit','质量差'];
+    if (qc.some(k => rl.includes(k) || nl.includes(k))) { resp = '品控'; }
+    // 仓库（仅 reason）
+    else if (/物流中心损坏|damaged by fc|fc/.test(rl)) { resp = '仓库'; }
+    // 物流（仅 reason）
+    else if (/无法投递|undeliverable|运输途中损坏|damaged by carrier|未在预计时间内送达|missed estimated delivery|never arriv|未送达|调包|switcheroo/.test(rl)) { resp = '物流'; }
+    // 客户（匹配 reason + note）
+    else if (/不想要|unwanted|无意购买|订购了错误|ordered wrong|误购|misordered|未提供原因|no reason given|找到更优惠|better price|未经授权|unauthorized|改变主意|不需要|不再需要|不喜欢|没有必要|购买太多|订了太多|不合适|太小|太大/.test(rl + '\n' + nl)) { resp = '客户'; }
+    // 采购（仅 reason）
+    else if (/停产|下架|不可售|晚发货|延期/.test(rl)) { resp = '采购'; }
+    // 运营（匹配 reason + note）
+    else if (/折扣|discount|tp邀评|尺寸过大|尺寸过小|too large|too small|与描述不符|not as described/.test(rl + '\n' + nl)) { resp = '运营'; }
+
     respMap[resp] = (respMap[resp]||0) + 1;
   });
   let rpLabels = Object.keys(respMap).sort((a,b) => respMap[b]-respMap[a]);
