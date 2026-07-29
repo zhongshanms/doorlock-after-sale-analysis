@@ -71,6 +71,12 @@ $Repo = "git@github.com:zhongshanms/doorlock-after-sale-analysis.git"
 $Cache = Join-Path $PSScriptRoot ".sync_cache"
 $Branch = "main"
 
+# 宝塔服务器配置
+$ServerRemote = "server"
+$ServerUrl = "ssh://root@119.29.107.118:53844/www/wwwroot/doorlock.zhongshanzhiliang.top"
+$PemPath = Join-Path $Cache "tencentbaota.pem"
+$MaxRetries = 3
+
 Write-Host "源文件：$(Split-Path $SourceFile -Leaf)"
 Write-Host ""
 
@@ -221,25 +227,75 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  [OK]"
 }
 
-# ── 推送 ──
+# ── 推送（双远程） ──
+function Push-ToRemote {
+    param([string]$RemoteName, [string]$SshKey, [string]$Label)
+    Write-Host "[$Label] 正在推送..."
+
+    if ($RemoteName -eq $ServerRemote) {
+        if (-not (Test-Path -LiteralPath $SshKey)) {
+            Write-Host "  [SKIP] 宝塔SSH密钥未找到: $SshKey"
+            return $false
+        }
+        $env:GIT_SSH_COMMAND = "ssh -i `"$SshKey`" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL"
+    } else {
+        $env:GIT_SSH_COMMAND = $null
+    }
+
+    & "$Git" push $RemoteName $Branch 2>&1 | ForEach-Object { Write-Host "  $_" }
+    $ok = ($LASTEXITCODE -eq 0)
+    if ($ok) { Write-Host "  [OK] $Label 推送成功" } else { Write-Host "  [FAIL] $Label 推送失败" }
+
+    $env:GIT_SSH_COMMAND = $null
+    return $ok
+}
+
+function Push-WithRetry {
+    param([string]$RemoteName, [string]$SshKey, [string]$Label)
+    for ($i = 1; $i -le $MaxRetries; $i++) {
+        if ($i -gt 1) { Write-Host "  [重试] 第 $i/$MaxRetries 次..." }
+        $result = Push-ToRemote -RemoteName $RemoteName -SshKey $SshKey -Label $Label
+        if ($result) { return $true }
+        if ($i -lt $MaxRetries) { Start-Sleep -Seconds 3 }
+    }
+    Write-Host "  [X] $Label 已重试 $MaxRetries 次，全部失败"
+    return $false
+}
+
 Write-Host ""
-Write-Host "[4/4] 推送到 GitHub..."
-& "$Git" push origin $Branch
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[X] 推送失败！"
-    Write-Host "常见原因：1. 网络不通  2. SSH 密钥未配置  3. 仓库权限"
+Write-Host "[4/4] 推送到远端..."
+# 确保 server 远程已添加
+$remotes = & "$Git" remote 2>$null
+if ($remotes -notcontains $ServerRemote) {
+    & "$Git" remote add $ServerRemote $ServerUrl 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [警告] 无法添加服务器远程: $ServerUrl"
+    }
+}
+
+$ghOk = Push-WithRetry -RemoteName "origin" -SshKey $null -Label "GitHub"
+Write-Host ""
+$btOk = Push-WithRetry -RemoteName $ServerRemote -SshKey $PemPath -Label "宝塔"
+
+Write-Host ""
+Write-Host "============================================"
+if ($ghOk -and $btOk) {
+    Write-Host "  SUCCESS - 双端推送完成"
+} elseif ($ghOk) {
+    Write-Host "  PARTIAL - GitHub [OK]  | 宝塔 [FAIL]"
+} elseif ($btOk) {
+    Write-Host "  PARTIAL - GitHub [FAIL] | 宝塔 [OK]"
+} else {
+    Write-Host "  FAILED - 双端推送均失败"
+    Write-Host "  常见原因：1. 网络不通  2. SSH 密钥未配置  3. 仓库权限"
     Write-Host ""
     Read-Host "按回车退出"
     exit 1
 }
-Write-Host "  [OK]"
-
 Write-Host ""
-Write-Host "============================================"
-Write-Host "  同步完成！"
-Write-Host ""
-Write-Host "  1-2 分钟后在线更新"
-Write-Host "  https://zhongshanms.github.io/doorlock-after-sale-analysis/"
+Write-Host "  站点地址："
+Write-Host "  GitHub: https://zhongshanms.github.io/doorlock-after-sale-analysis/"
+Write-Host "  宝塔:   https://doorlock.zhongshanzhiliang.top/"
 Write-Host "============================================"
 Write-Host ""
 Read-Host "按回车退出"

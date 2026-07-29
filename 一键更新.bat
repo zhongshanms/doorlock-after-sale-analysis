@@ -48,7 +48,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [2/2] 推送到 GitHub...
+echo [2/2] 双端推送 (GitHub + 宝塔)...
 echo.
 :RUN_SYNC
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SYNC%"
@@ -60,8 +60,9 @@ if %ERRORLEVEL% neq 0 (
 
 echo.
 echo ============================================
-echo   完成！1-2 分钟后所有设备可刷新查看
-echo   https://zhongshanms.github.io/doorlock-after-sale-analysis/
+echo   完成！数据已推送至双端
+echo   GitHub: https://zhongshanms.github.io/doorlock-after-sale-analysis/
+echo   宝塔:   https://doorlock.zhongshanzhiliang.top/
 echo ============================================
 echo.
 pause
