@@ -600,8 +600,45 @@ function fetchWithTimeout(url, timeoutMs, options) {
   });
 }
 
+// ── 版本检查：数据源版本变化时清空过期 UploadDB / DataCache ──
+// 必须在任何数据加载(含 UploadDB)之前执行，否则旧上传数据会一直覆盖新 json
+async function checkVersionAndClearCache() {
+  try {
+    let versionUrl = './data/version.json?v=' + APP_VERSION;
+    let vResp = await fetch(versionUrl, {cache: 'no-store'});
+    if (!vResp.ok) return '';
+    let versionInfo = await vResp.json();
+    let currentVersion = versionInfo.version || '';
+    let lastKnownVer = localStorage.getItem('last_data_version');
+    if (lastKnownVer && lastKnownVer !== currentVersion) {
+      try {
+        let uDB = getUploadDB();
+        let oldCount = await uDB.records.count();
+        await uDB.records.clear();
+        uDB.close();
+        uploadDB = null;
+        debugLog('版本变更(' + lastKnownVer + '→' + currentVersion + '): 已清空 UploadDB ' + oldCount + ' 条', 'warn');
+      } catch(e) { console.warn('UploadDB clear failed:', e); }
+      try {
+        let cDB = getDataCacheDB();
+        await cDB.cache.clear();
+        cDB.close();
+        dataCacheDB = null;
+      } catch(e) {}
+    }
+    localStorage.setItem('last_data_version', currentVersion);
+    return currentVersion;
+  } catch(e) {
+    console.warn('version check failed:', e);
+    return '';
+  }
+}
+
 async function loadData() {
   let detailEl = document.getElementById('loading-detail');
+
+  // ── 版本检查必须在 UploadDB 之前：旧上传数据会以旧口径覆盖新 json ──
+  let currentVersion = await checkVersionAndClearCache();
 
   // ── 彻底重置模式：不加载任何数据，页面空白 ──
   if (sessionStorage.getItem('data_reset_pending') === '1') {
@@ -639,32 +676,9 @@ async function loadData() {
   }
 
   // ── Check IndexedDB cache first (instant load on repeat visits) ──
-  try {
-    let versionUrl = './data/version.json?v=' + APP_VERSION;
-    let vResp = await fetch(versionUrl, {cache: 'no-store'});
-    if (vResp.ok) {
-      let versionInfo = await vResp.json();
-      let currentVersion = versionInfo.version || '';
-      // ── 版本号变化：同时清空 UploadDB 和 DataCache ──
-      let lastKnownVer = localStorage.getItem('last_data_version');
-      if (lastKnownVer && lastKnownVer !== currentVersion) {
-        try {
-          let uDB = getUploadDB();
-          let oldCount = await uDB.records.count();
-          await uDB.records.clear();
-          uDB.close();
-          uploadDB = null;
-          debugLog('版本变更(' + lastKnownVer + '→' + currentVersion + '): 已清空 UploadDB ' + oldCount + ' 条', 'warn');
-        } catch(e) { console.warn('UploadDB clear failed:', e); }
-        try {
-          let cDB = getDataCacheDB();
-          await cDB.cache.clear();
-          cDB.close();
-          dataCacheDB = null;
-        } catch(e) {}
-      }
-      localStorage.setItem('last_data_version', currentVersion);
-
+  // 版本号已在 checkVersionAndClearCache() 中获取并完成过期缓存清理
+  if (currentVersion) {
+    try {
       let db = getDataCacheDB();
       let cached = await db.cache.get('compact_data');
       if (cached && cached.version === currentVersion) {
@@ -676,9 +690,9 @@ async function loadData() {
         debugLog('数据来源: IndexedDB缓存 (售后=' + gAfterSale.length + ' 销量=' + gSales.length + ')', 'success');
         return;
       }
+    } catch(e) {
+      console.warn('IndexedDB cache check failed, will fetch from network:', e.message);
     }
-  } catch(e) {
-    console.warn('IndexedDB cache check failed, will fetch from network:', e.message);
   }
 
   // ── Fallback: load from compact JSON file ──
