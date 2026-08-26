@@ -24,13 +24,39 @@ def _find_latest(desktop, pattern):
 
 DESKTOP = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
 
+
+# ── DLP 解密辅助：PayGuard 加密的 xlsx (88 7d 1c 头) 通过 WPS COM 绕开 ──
+def _dlp_decrypt(filepath):
+    """如果是 DLP 加密的 xlsx，用 WPS COM SaveCopyAs 解密到临时文件，返回解密路径"""
+    DLP_HEADER = b'\x88\x7d\x1c'
+    with open(filepath, 'rb') as f:
+        head = f.read(3)
+    if head != DLP_HEADER:
+        return filepath
+    import tempfile
+    dest = os.path.join(tempfile.gettempdir(), f"doorlock_decrypted_{os.path.basename(filepath)}")
+    print(f"[DLP] 检测到加密 ({head.hex()})，WPS 解密 → {dest}")
+    try:
+        import win32com.client as win32
+    except ImportError:
+        os.system(f'"{sys.executable}" -m pip install pywin32 -q')
+        import win32com.client as win32
+    wps = win32.Dispatch("Ket.Application")
+    wb = wps.Workbooks.Open(os.path.abspath(filepath), 0, True)
+    wb.SaveCopyAs(dest)
+    wb.Close(False)
+    wps.Quit()
+    return dest
+
+
 # 检测输入模式：单文件合并 vs 双文件分离
 MERGED_FILE = None
 if len(sys.argv) > 1 and sys.argv[1].lower().endswith(('.xlsx', '.xls')):
-    # 探测是否为合并文件（含"售后明细"sheet）
-    _wb = openpyxl.load_workbook(sys.argv[1], data_only=True, read_only=True)
+    # 探测是否为合并文件（含"售后明细"sheet），先解密
+    _path = _dlp_decrypt(sys.argv[1])
+    _wb = openpyxl.load_workbook(_path, data_only=True, read_only=True)
     if "售后明细" in _wb.sheetnames:
-        MERGED_FILE = sys.argv[1]
+        MERGED_FILE = _path
     _wb.close()
 
 if MERGED_FILE:
@@ -125,6 +151,7 @@ def classify_responsibility(reason, buyer_note=""):
 
 # ── 读取 Excel ──
 def read_excel(filepath, sheet_name=None):
+    filepath = _dlp_decrypt(filepath)
     print(f"读取: {filepath}" + (f" [sheet={sheet_name}]" if sheet_name else ""))
     wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
     ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb.active
@@ -135,6 +162,27 @@ def read_excel(filepath, sheet_name=None):
     wb.close()
     print(f"  → {len(rows)} 行数据, 表头: {headers}")
     return headers, rows
+
+
+def _norm(name):
+    """列名规范化: 全角括号→半角, 去空格。解决 (套)/(包裹) 全半角混用问题"""
+    return (name or "").replace("\uff08", "(").replace("\uff09", ")").strip()
+
+
+def _read_qty(row, cm, set_col, pack_col, pack_col2, old_col):
+    """读取数量, 优先级: 1)套列 2)包裹×PACK 3)旧格式包裹列"""
+    if set_col in cm and row[cm[set_col]] not in (None, ""):
+        return row[cm[set_col]]
+    if pack_col in cm and pack_col2 in cm:
+        p = row[cm[pack_col]]
+        k = row[cm[pack_col2]]
+        try:
+            return float(p or 0) * float(k or 0)  # 套 = 包裹 × PACK
+        except (ValueError, TypeError):
+            pass
+    if old_col in cm:
+        return row[cm[old_col]]
+    return 0
 
 
 # ── 主转换 ──
@@ -148,8 +196,10 @@ def main():
     # 列映射 - 兼容两种格式
     # 完整格式: 订单号、店铺、国家、SKU、售后数量、售后类型、售后时间、订购时间、售后原因、买家备注
     # 精简格式: SKU、售后数量、售后类型、售后时间、订购时间、售后原因、买家备注
-    col_map = {h: i for i, h in enumerate(ah)}
+    col_map = {_norm(h): i for i, h in enumerate(ah)}
     is_compact = "订单号" not in col_map  # 精简格式无订单号列
+    is_new_format = ("售后数量(套)" in col_map) or ("售后数量(包裹)" in col_map)
+    print(f"[格式] 售后表: {'新格式(套)' if is_new_format else '旧格式'}")
 
     after_sale_records = []
     type_counter = Counter()
@@ -164,7 +214,7 @@ def main():
         if not sku_val or not sku_val.startswith("MS"):
             continue
 
-        rq_val = row[col_map["售后数量"]]
+        rq_val = _read_qty(row, col_map, "售后数量(套)", "售后数量(包裹)", "PACK", "售后数量")
         try:
             rq_val = int(rq_val)
         except (ValueError, TypeError):
@@ -224,7 +274,9 @@ def main():
     sr_sheet = "销量明细" if INPUT_MODE == "merged" else None
     sh, sr_rows = read_excel(SALES_FILE, sr_sheet)
     # 列映射: 0:时间 1:SKU 2:销量 3:订单量
-    s_col_map = {h: i for i, h in enumerate(sh)}
+    s_col_map = {_norm(h): i for i, h in enumerate(sh)}
+    s_is_new = ("销量(套)" in s_col_map) or ("销量(包裹)" in s_col_map)
+    print(f"[格式] 销量表: {'新格式(套)' if s_is_new else '旧格式'}")
 
     sales_records = []
     total_sales = 0
@@ -243,8 +295,11 @@ def main():
             d_str = str(date_val).strip()[:10] if date_val else ""
         year = int(d_str[:4]) if d_str[:4].isdigit() else 0
 
-        sq_val = row[s_col_map["销量"]]
-        oq_val = row[s_col_map["订单量"]]
+        sq_val = _read_qty(row, s_col_map, "销量(套)", "销量(包裹)", "PACK", "销量")
+        oq_idx = s_col_map.get("订单量(个)")
+        if oq_idx is None:
+            oq_idx = s_col_map.get("订单量")
+        oq_val = row[oq_idx] if oq_idx is not None else 0
         try:
             sq_val = int(sq_val)
             oq_val = int(oq_val)

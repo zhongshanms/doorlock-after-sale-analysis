@@ -1,7 +1,7 @@
-﻿{
-    "generated_at":  "2026-07-28 18:23:32",
-    "total_after_sale":  62772,
-    "total_sales":  525956,
-    "version":  "sync-20260728-182332",
-    "total_orders":  456305
+{
+  "version": "2026-08-26-v1",
+  "generated_at": "2026-08-26 21:10:58",
+  "total_after_sale": 66995,
+  "total_sales": 1790183,
+  "total_orders": 479665
 }

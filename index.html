@@ -312,7 +312,7 @@ tbody tr:hover{background:#f8f9ff}
     <h3>详细对比数据</h3>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>分组</th><th>订单量</th><th>工单数</th><th>售后数</th><th>涉及SKU</th><th>售后率</th></tr></thead>
+        <thead><tr><th>分组</th><th>销量(套)</th><th>工单数</th><th>售后数(套)</th><th>涉及SKU</th><th>售后率</th></tr></thead>
         <tbody id="overviewTable"></tbody>
       </table>
     </div>
@@ -626,8 +626,8 @@ async function loadData() {
     if (afterCount > 0 || salesCount > 0) {
       if (afterCount > 0) await rebuildFromUploadDB('after');
       if (salesCount > 0) await rebuildFromUploadDB('sales');
-      document.getElementById('status-after').textContent = '售后：' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '-Pack';
-      document.getElementById('status-sales').textContent = '销量：' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '-Pack';
+      document.getElementById('status-after').textContent = '售后：' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '-套';
+      document.getElementById('status-sales').textContent = '销量：' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '-套';
       setDefaultDateRange();
       updateDateRangeLabel();
       refreshOverview(); refreshCharts(); refreshAnalysis(); refreshDetail(); refreshDBStatus();
@@ -922,7 +922,7 @@ async function mergeUploadedData() {
           reason: row.reason || row['售后原因'] || row['Reason'] || '',
           refund_status: row.refund_status || row['退款状态'] || row['Refund Status'] || '',
           refund_amount: parseFloat(row.refund_amount || row['退款金额'] || row['Refund Amount'] || 0) || 0,
-          return_qty: parseInt(row.return_qty || row['售后数量'] || row['退货数量'] || row['Return Qty'] || 1) || 1,
+          return_qty: parseInt(row.return_qty || row['售后数量(套)'] || row['售后数量'] || row['退货数量'] || row['Return Qty'] || 1) || 1,
           tag: row.tag || row['标签'] || row['买家备注'] || row['Tag'] || '',
           create_time: row.create_time || row.create_date || row['创建时间'] || row['售后时间'] || row['Create Date'] || '',
           create_date: row.create_date || row.create_time || row['创建时间'] || row['售后时间'] || row['Create Date'] || '',
@@ -943,8 +943,8 @@ async function mergeUploadedData() {
         if (!d || !s) { salesNoKey++; return; }
         var normalized = {
           date: d, date_date: d, sku: s,
-          sales_qty: parseInt(row.sales_qty || row['销量'] || row['Sales Qty'] || 0) || 0,
-          order_qty: parseInt(row.order_qty || row['订单量'] || row['Order Qty'] || 1) || 1,
+          sales_qty: parseInt(row.sales_qty || row['销量(套)'] || row['销量'] || row['Sales Qty'] || 0) || 0,
+          order_qty: parseInt(row.order_qty || row['订单量(个)'] || row['订单量'] || row['Order Qty'] || 1) || 1,
           year: rec.year || 0,
         };
         var rowKey = JSON.stringify(Object.entries(normalized).sort((a,b) => a[0].localeCompare(b[0])).map(([k,v]) => [k, v === undefined ? '' : String(v)]));
@@ -1039,7 +1039,7 @@ async function rebuildFromUploadDB(type) {
           sku: String(r['SKU'] || r.sku || r['Sku'] || '').trim(),
           reason: String(r['售后原因'] || r.reason || r['Reason'] || ''),
           refund_status: String(r['退款状态'] || r.refund_status || r['Refund Status'] || ''),
-          return_qty: parseInt(r['售后数量'] || r.return_qty || r['退货数量'] || r['Return Qty'] || 1) || 1,
+          return_qty: parseInt(r['售后数量(套)'] || r['售后数量'] || r.return_qty || r['退货数量'] || r['Return Qty'] || 1) || 1,
           tag: String(r['标签'] || r['买家备注'] || r.tag || r['Tag'] || ''),
           create_time: String(r['售后时间'] || r['创建时间'] || r.create_time || r['Create Date'] || ''),
           create_date: String(r['售后时间'] || r['创建时间'] || r.create_date || r['Create Date'] || ''),
@@ -1053,8 +1053,8 @@ async function rebuildFromUploadDB(type) {
           date: String(r2['日期'] || r2['时间'] || r2.date || r2['Date'] || ''),
           date_date: String(r2['日期'] || r2['时间'] || r2.date || r2['Date'] || ''),
           sku: String(r2['SKU'] || r2.sku || '').trim(),
-          sales_qty: parseInt(r2['销量'] || r2.sales_qty || r2['Sales Qty'] || 0) || 0,
-          order_qty: parseInt(r2['订单量'] || r2.order_qty || r2['Order Qty'] || 1) || 1,
+          sales_qty: parseInt(r2['销量(套)'] || r2['销量'] || r2.sales_qty || r2['Sales Qty'] || 0) || 0,
+          order_qty: parseInt(r2['订单量(个)'] || r2['订单量'] || r2.order_qty || r2['Order Qty'] || 1) || 1,
           year: rec.year || 0,
         };
       }
@@ -1105,8 +1105,8 @@ async function initData(json) {
   await mergeUploadedData();
 
   // Update status
-  document.getElementById('status-after').textContent = `售后：${fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0))}-Pack`;
-  document.getElementById('status-sales').textContent = `销量：${fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0))}-Pack`;
+  document.getElementById('status-after').textContent = `售后：${fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0))}-套`;
+  document.getElementById('status-sales').textContent = `销量：${fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0))}-套`;
 
   // Set default date range (last 150 days)
   setDefaultDateRange();
@@ -1401,13 +1401,14 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
 
   // Cards
   let totalOrders = salesF.reduce((s,r) => s + (r.order_qty||0), 0);
+  let totalSales = salesF.reduce((s,r) => s + (r.sales_qty||0), 0);  // 销量(套)
   let afterCount = afterF.length;
-  let returnQty = afterF.reduce((s,r) => s + (r.return_qty||0), 0);
+  let returnQty = afterF.reduce((s,r) => s + (r.return_qty||0), 0);  // 售后数量(套)
   let uniqueSku = new Set(afterF.map(r => r.sku)).size;
 
   document.getElementById('overviewCards').innerHTML = `
     <div class="stat-card"><div class="label">总订单量</div><div class="value" style="color:var(--chart-blue)">${fmtNum(totalOrders)}</div></div>
-    <div class="stat-card"><div class="label">售后工单量</div><div class="value" style="color:var(--chart-red)">${fmtNum(afterCount)}</div><div class="sub">售后率 ${totalOrders>0?(afterCount/totalOrders*100).toFixed(1):0}%</div></div>
+    <div class="stat-card"><div class="label">售后工单量</div><div class="value" style="color:var(--chart-red)">${fmtNum(afterCount)}</div><div class="sub">售后率 ${totalSales>0?(returnQty/totalSales*100).toFixed(1):0}%</div></div>
     <div class="stat-card"><div class="label">售后产品数量</div><div class="value" style="color:var(--chart-orange)">${fmtNum(returnQty)}</div></div>
     <div class="stat-card"><div class="label">涉及SKU种数</div><div class="value" style="color:var(--chart-green)">${fmtNum(uniqueSku)}</div></div>
   `;
@@ -1433,11 +1434,10 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
   let periods = [...new Set([...Object.keys(groupMapAS), ...Object.keys(groupMapSL)])].sort();
 
   // Trend chart
-  let salesVals = periods.map(p => groupMapSL[p]||0);
-  let afterVals = periods.map(p => (groupMapAS[p]||{}).returnQty||0);
-  let afterRateVals = periods.map((p,i) => salesVals[i] > 0 ? (afterVals[i]/salesVals[i]*100).toFixed(1) : '0.0');
-  // 所选时间段内的平均售后率（加权：Σ工单数/Σ订单量，与卡片"售后率"口径一致）
-  let avgRate = totalOrders > 0 ? (afterCount / totalOrders * 100).toFixed(1) : 0;
+  let salesVals = periods.map(p => groupMapSL[p]||0);  // 销量(套)
+  let afterVals = periods.map(p => (groupMapAS[p]||{}).returnQty||0);  // 售后数量(套)
+  // 所选时间段内的平均售后率（加权：Σ售后数量(套)/Σ销量(套)，与卡片"售后率"口径一致）
+  let avgRate = totalSales > 0 ? (returnQty / totalSales * 100).toFixed(1) : 0;
 
   destroyChart('chartTrend');
   let trendCtx = document.getElementById('chartTrend');
@@ -1447,17 +1447,17 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
       data: {
         labels: periods,
         datasets: [
-          // 销量 — 柱状图（左，图例左侧）
+          // 销量(套) — 柱状图（左，图例左侧）
           {
-            label: '销量',
+            label: '销量(套)',
             data: salesVals,
             backgroundColor: 'rgba(78,121,167,0.8)',
             borderRadius: 4,
             order: 1,
           },
-          // 售后数量 — 柱状图
+          // 售后数量(套) — 柱状图
           {
-            label: '售后数量',
+            label: '售后数量(套)',
             data: afterVals,
             backgroundColor: 'rgba(225,87,89,0.8)',
             borderRadius: 4,
@@ -1559,10 +1559,10 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
   let tbody = document.getElementById('overviewTable');
   tbody.innerHTML = periods.map(p => {
     let as = groupMapAS[p] || { count:0, returnQty:0, refundAmt:0, refundCount:0, skus: new Set() };
-    let orderQty = groupMapSL[p] || 0;
+    let salesQty = groupMapSL[p] || 0;  // 销量(套)
     return `<tr>
-      <td>${p}</td><td>${fmtNum(orderQty)}</td><td>${fmtNum(as.count)}</td><td>${fmtNum(as.returnQty)}</td>
-      <td>${as.skus.size}</td><td>${orderQty > 0 ? (as.count/orderQty*100).toFixed(2) + '%' : '-'}</td>
+      <td>${p}</td><td>${fmtNum(salesQty)}</td><td>${fmtNum(as.count)}</td><td>${fmtNum(as.returnQty)}</td>
+      <td>${as.skus.size}</td><td>${salesQty > 0 ? (as.returnQty/salesQty*100).toFixed(2) + '%' : '-'}</td>
     </tr>`;
   }).join('');
 }
@@ -2058,8 +2058,8 @@ function processUpload(file, type) {
           // 标记用户已上传，防止预置JSON覆盖
           sessionStorage.setItem('upload_active', '1');
           // Update status bar
-          document.getElementById('status-after').textContent = '售后：' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '-Pack';
-          document.getElementById('status-sales').textContent = '销量：' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '-Pack';
+          document.getElementById('status-after').textContent = '售后：' + fmtNum(gAfterSale.reduce((s,r) => s + (r.return_qty||0), 0)) + '-套';
+          document.getElementById('status-sales').textContent = '销量：' + fmtNum(gSales.reduce((s,r) => s + (r.sales_qty||0), 0)) + '-套';
           debugLog('状态栏已更新: 售后=' + gAfterSale.length + ' 销量=' + gSales.length, 'success');
           updateDateRangeLabel();
           refreshOverview();
