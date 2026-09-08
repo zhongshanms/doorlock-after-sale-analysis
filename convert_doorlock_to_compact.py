@@ -155,7 +155,13 @@ def read_excel(filepath, sheet_name=None):
     print(f"读取: {filepath}" + (f" [sheet={sheet_name}]" if sheet_name else ""))
     wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
     ws = wb[sheet_name] if sheet_name and sheet_name in wb.sheetnames else wb.active
-    headers = [cell.value for cell in ws[1]]
+    # ERP 导出 xlsx 的 dimension 声明可能不完整(如声明到58543行但实际69767行),
+    # read_only 模式按 dimension 截断读取 → reset 忽略声明,按实际数据行扫描
+    try:
+        ws.reset_dimensions()
+    except Exception:
+        pass
+    headers = list(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))
     rows = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         rows.append(row)
