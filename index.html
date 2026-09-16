@@ -1318,6 +1318,11 @@ function filterSales(startDate, endDate, supIdx) {
     if (!d) return false;
     if (start && d < start) return false;
     if (end && d > end) return false;
+    if (supIdx !== null && supIdx !== undefined) {
+      let si = skuIdOf(r);
+      if (supIdx === 'none') { if (si !== undefined) return false; }
+      else if (si !== supIdx) return false;
+    }
     return true;
   });
 }
