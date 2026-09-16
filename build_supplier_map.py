@@ -27,6 +27,40 @@ OUT_JSON = os.path.join(DATA_DIR, "supplier-map.json")
 DECRYPT_PS1 = os.path.join(BASE, "decrypt_xlsx.ps1")
 DEFAULT_SRC = r"C:\Users\DELL\WorkBuddy\质量管理数据库\08-采购数据\SKU当前供应商.xlsx"
 COMPACT_JSON = os.path.join(DATA_DIR, "after-sale-data-compact.json")
+EXCLUSIONS_FILE = os.path.join(BASE, "exclusions.json")
+
+# ── 停用排除清单(不合作供应商 / 非目标产品) ──
+_excl = {"sku_prefixes": ["MSCG"], "skus": [], "suppliers": []}
+try:
+    with open(EXCLUSIONS_FILE, encoding="utf-8") as _f:
+        _raw = json.load(_f)
+    for _k in _excl:
+        if _raw.get(_k):
+            _excl[_k] = _raw[_k]
+except FileNotFoundError:
+    pass
+except Exception as _e:
+    print(f"[!] exclusions.json 读取失败,使用默认排除({_excl['sku_prefixes']}): {_e}")
+
+_EXCL_PREFIXES = [str(p).strip().upper() for p in _excl["sku_prefixes"]]
+_EXCL_SKUS = {str(s).strip().upper() for s in _excl["skus"]}
+EXCLUDED_SUPPLIERS = [str(s).strip() for s in _excl["suppliers"]]
+
+
+def is_excluded_sku(sku):
+    up = str(sku or "").strip().upper()
+    if not up:
+        return True
+    if up in _EXCL_SKUS:
+        return True
+    return any(up.startswith(p) for p in _EXCL_PREFIXES)
+
+
+def is_excluded_supplier(name):
+    n = str(name or "").strip()
+    if not n:
+        return False
+    return any(n == s or (len(s) >= 4 and s in n) for s in EXCLUDED_SUPPLIERS)
 
 
 def _decrypt(path):
@@ -93,7 +127,7 @@ def build(src_path=DEFAULT_SRC):
     # 收集记录, 同时建前缀索引: 前缀 -> {供应商: [最近下单时间, SKU数]}
     recs = []
     pfx_index = {}
-    skipped = {"non_ms": 0, "mscg": 0, "empty_sup": 0}
+    skipped = {"non_ms": 0, "excluded": 0, "excluded_sup": 0, "empty_sup": 0}
     for row in rows[hdr_idx + 1:]:
         if not row:
             continue
@@ -107,11 +141,14 @@ def build(src_path=DEFAULT_SRC):
         if not up.startswith("MS"):
             skipped["non_ms"] += 1
             continue
-        if up.startswith("MSCG"):      # 非门锁产品
-            skipped["mscg"] += 1
+        if is_excluded_sku(sku):          # 停用清单: MSCG 非门锁 / MS3011 黑迪已不合作
+            skipped["excluded"] += 1
             continue
         if not sup:
             skipped["empty_sup"] += 1
+            continue
+        if is_excluded_supplier(sup):     # 不合作供应商
+            skipped["excluded_sup"] += 1
             continue
         recs.append((sku, sup, t))
         e = pfx_index.setdefault(up[:PREFIX_LEN], {}).setdefault(sup, ["", 0])
@@ -169,7 +206,8 @@ def build(src_path=DEFAULT_SRC):
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
 
     print(f"  MS SKU 直接映射 {direct_cnt} 条; 前缀继承补充 {len(inherited)} 条 → 共 {len(sku_map)} 条, {len(suppliers)} 家供应商")
-    print(f"  跳过: 非MS {skipped['non_ms']} 条, MSCG {skipped['mscg']} 条, 供应商为空 {skipped['empty_sup']} 条")
+    print(f"  跳过: 非MS {skipped['non_ms']} 条, 停用清单(前缀/SKU) {skipped['excluded']} 条, "
+          f"不合作供应商 {skipped['excluded_sup']} 条, 供应商为空 {skipped['empty_sup']} 条")
     for s, i in sorted(sup_index.items(), key=lambda kv: -sum(1 for v in sku_map.values() if v == kv[1])):
         cnt = sum(1 for v in sku_map.values() if v == i)
         print(f"    {cnt:>5}  {s}")

@@ -83,6 +83,34 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "data")
 COMPACT_FILE = os.path.join(OUTPUT_DIR, "after-sale-data-compact.json")
 VERSION_FILE = os.path.join(OUTPUT_DIR, "version.json")
 
+# ── 停用排除清单(不合作供应商的产品) ──
+EXCLUSIONS_FILE = os.path.join(os.path.dirname(__file__), "exclusions.json")
+_excl = {"sku_prefixes": ["MSCG"], "skus": [], "suppliers": []}
+try:
+    with open(EXCLUSIONS_FILE, encoding="utf-8") as _f:
+        _raw = json.load(_f)
+    for _k in _excl:
+        if _raw.get(_k):
+            _excl[_k] = _raw[_k]
+except FileNotFoundError:
+    pass
+except Exception as _e:
+    print(f"[!] exclusions.json 读取失败,使用默认排除({_excl['sku_prefixes']}): {_e}")
+
+_EXCL_PREFIXES = [str(p).strip().upper() for p in _excl["sku_prefixes"]]
+_EXCL_SKUS = {str(s).strip().upper() for s in _excl["skus"]}
+EXCLUDED_SUPPLIERS = [str(s).strip() for s in _excl["suppliers"]]
+
+
+def is_excluded_sku(sku):
+    """SKU 是否命中停用排除清单(前缀或完整码);空 SKU 视为排除"""
+    up = str(sku or "").strip().upper()
+    if not up:
+        return True
+    if up in _EXCL_SKUS:
+        return True
+    return any(up.startswith(p) for p in _EXCL_PREFIXES)
+
 
 # ── 责任方分类规则 ──
 def classify_responsibility(reason, buyer_note=""):
@@ -217,8 +245,8 @@ def main():
     for row in ar_rows:
         tid = str(row[col_map["订单号"]]).strip() if not is_compact and row[col_map["订单号"]] else ""
         sku_val = str(row[col_map["SKU"]]).strip() if row[col_map["SKU"]] else ""
-        # MSCG 开头非门锁产品(用户 2026-09-16 确认),排除
-        if not sku_val or not sku_val.startswith("MS") or sku_val.upper().startswith("MSCG"):
+        # 只保留 MS 开头门锁 SKU; 停用清单(如 MSCG 非门锁、MS3011 黑迪已不合作)排除
+        if not sku_val or not sku_val.startswith("MS") or is_excluded_sku(sku_val):
             continue
 
         rq_val = _read_qty(row, col_map, "售后数量(套)", "售后数量(包裹)", "PACK", "售后数量")
@@ -292,8 +320,8 @@ def main():
     print("转换销量数据...")
     for row in sr_rows:
         sku_val = str(row[s_col_map["SKU"]]).strip() if row[s_col_map["SKU"]] else ""
-        # MSCG 开头非门锁产品(用户 2026-09-16 确认),排除
-        if not sku_val or not sku_val.startswith("MS") or sku_val.upper().startswith("MSCG"):
+        # 只保留 MS 开头门锁 SKU; 停用清单(如 MSCG 非门锁、MS3011 黑迪已不合作)排除
+        if not sku_val or not sku_val.startswith("MS") or is_excluded_sku(sku_val):
             continue
 
         date_val = row[s_col_map["时间"]]
