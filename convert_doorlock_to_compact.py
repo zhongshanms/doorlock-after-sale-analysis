@@ -217,7 +217,8 @@ def main():
     for row in ar_rows:
         tid = str(row[col_map["订单号"]]).strip() if not is_compact and row[col_map["订单号"]] else ""
         sku_val = str(row[col_map["SKU"]]).strip() if row[col_map["SKU"]] else ""
-        if not sku_val or not sku_val.startswith("MS"):
+        # MSCG 开头非门锁产品(用户 2026-09-16 确认),排除
+        if not sku_val or not sku_val.startswith("MS") or sku_val.upper().startswith("MSCG"):
             continue
 
         rq_val = _read_qty(row, col_map, "售后数量(套)", "售后数量(包裹)", "PACK", "售后数量")
@@ -291,7 +292,8 @@ def main():
     print("转换销量数据...")
     for row in sr_rows:
         sku_val = str(row[s_col_map["SKU"]]).strip() if row[s_col_map["SKU"]] else ""
-        if not sku_val or not sku_val.startswith("MS"):
+        # MSCG 开头非门锁产品(用户 2026-09-16 确认),排除
+        if not sku_val or not sku_val.startswith("MS") or sku_val.upper().startswith("MSCG"):
             continue
 
         date_val = row[s_col_map["时间"]]

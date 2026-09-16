@@ -448,7 +448,8 @@ function fmtPeriod(dateStr, granularity) {
   if (granularity === 'month') return fmtDate(d).slice(0,7);
   if (granularity === 'week') {
     let iso = getISOWeek(d);
-    return `${d.getFullYear()}-W${String(iso[1]).padStart(2,'0')}`;
+    // 用 ISO 年，避免跨年周把 12 月末与次年 1 月初混入同一期
+    return `${iso[0]}-W${String(iso[1]).padStart(2,'0')}`;
   }
   return fmtDate(d);
 }
@@ -458,8 +459,35 @@ function getISOWeek(d) {
   let yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
   return [date.getUTCFullYear(), Math.ceil((((date-yearStart)/86400000)+1)/7)];
 }
-function fmtMoney(v) { return v != null ? '¥' + Number(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',') : '¥0.00'; }
-function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
+// ISO 年 year 的第 week 周的周一/周日
+function isoWeekRange(year, week) {
+  let jan4 = new Date(Date.UTC(year, 0, 4));
+  let dow = (jan4.getUTCDay() + 6) % 7;            // 周一=0
+  let mon = new Date(jan4);
+  mon.setUTCDate(jan4.getUTCDate() - dow + (week - 1) * 7);
+  let sun = new Date(mon);
+  sun.setUTCDate(mon.getUTCDate() + 6);
+  return [mon, sun];
+}
+// 期字符串 → {start, end}(YYYY-MM-DD)，与 fmtPeriod 的分组口径一致
+function periodToRange(period, granularity) {
+  if (!period) return null;
+  if (granularity === 'month') {
+    let m = /^(\d{4})-(\d{2})$/.exec(period);
+    if (!m) return null;
+    let y = +m[1], mo = +m[2];
+    let lastDay = new Date(y, mo, 0).getDate();
+    return { start: `${m[1]}-${m[2]}-01`, end: `${m[1]}-${m[2]}-${String(lastDay).padStart(2,'0')}` };
+  }
+  if (granularity === 'week') {
+    let m = /^(\d{4})-W(\d{2})$/.exec(period);
+    if (!m) return null;
+    let [mon, sun] = isoWeekRange(+m[1], +m[2]);   // ISO 周: 周一~周日
+    return { start: fmtDate(mon), end: fmtDate(sun) };
+  }
+  return { start: period, end: period };
+}
+function fmtMoney(v) { return v != null ? '¥' + Number(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',') : '¥0.00'; }function fmtNum(v) { return v != null ? Number(v).toLocaleString() : '0'; }
 function fmtPct(v, total) { return total > 0 ? (v/total*100).toFixed(1) + '%' : '0%'; }
 
 // ===== Debug Panel Helpers =====
@@ -1330,7 +1358,7 @@ function filterSales(startDate, endDate, supIdx) {
 // ========== CHARTS HELPERS ==========
 const CHART_COLORS = ['#4e79a7','#e15759','#59a14f','#f28e2b','#b07aa1','#76b7b2','#e377c2','#8c564b','#ff9da7','#9c755f','#bab0ac','#7cb5ec','#90ed7d','#f7a35c','#8085e9'];
 
-function makeBarChart(canvasId, labels, values, label, color, showValues=true) {
+function makeBarChart(canvasId, labels, values, label, color, showValues=true, onBarClick) {
   destroyChart(canvasId);
   let ctx = document.getElementById(canvasId);
   if (!ctx) return;
@@ -1348,6 +1376,14 @@ function makeBarChart(canvasId, labels, values, label, color, showValues=true) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (evt, elements) => {
+        if (!onBarClick || !elements || !elements.length) return;
+        onBarClick(labels[elements[0].index], elements[0].index);
+      },
+      onHover: (evt, elements) => {
+        if (!onBarClick || !evt.native || !evt.native.target) return;
+        evt.native.target.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => `${label}: ${fmtNum(ctx.raw)}` } }
@@ -1383,7 +1419,7 @@ function makeBarChart(canvasId, labels, values, label, color, showValues=true) {
   });
 }
 
-function makePieChart(canvasId, labels, values, colors) {
+function makePieChart(canvasId, labels, values, colors, onSliceClick) {
   destroyChart(canvasId);
   let ctx = document.getElementById(canvasId);
   if (!ctx) return;
@@ -1404,6 +1440,14 @@ function makePieChart(canvasId, labels, values, colors) {
       responsive: true,
       maintainAspectRatio: false,
       cutout: '55%',
+      onClick: (evt, elements) => {
+        if (!onSliceClick || !elements || !elements.length) return;
+        onSliceClick(labels[elements[0].index], elements[0].index);
+      },
+      onHover: (evt, elements) => {
+        if (!onSliceClick || !evt.native || !evt.native.target) return;
+        evt.native.target.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmtNum(ctx.raw)} (${fmtPct(ctx.raw, total)})` } }
@@ -1456,7 +1500,7 @@ function toggleDoughnutSlice(canvasId, index) {
   }
 }
 
-function makeHorizontalBar(canvasId, labels, values, label) {
+function makeHorizontalBar(canvasId, labels, values, label, onBarClick) {
   destroyChart(canvasId);
   let ctx = document.getElementById(canvasId);
   if (!ctx) return;
@@ -1476,6 +1520,14 @@ function makeHorizontalBar(canvasId, labels, values, label) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (evt, elements) => {
+        if (!onBarClick || !elements || !elements.length) return;
+        onBarClick(labels[elements[0].index], elements[0].index);
+      },
+      onHover: (evt, elements) => {
+        if (!onBarClick || !evt.native || !evt.native.target) return;
+        evt.native.target.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => `${label}: ${fmtNum(ctx.raw)} (${fmtPct(ctx.raw, total)})` } }
@@ -1608,6 +1660,18 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        onClick: (evt, elements) => {
+          if (!elements || !elements.length) return;
+          let idx = elements[0].index;
+          let g = document.getElementById('ov-granularity').value;
+          let r = periodToRange(periods[idx], g);
+          if (r) gotoDetailByRange(r.start, r.end, 'ov', periods[idx] + ' 明细');
+        },
+        onHover: (evt, elements) => {
+          if (evt.native && evt.native.target) {
+            evt.native.target.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+          }
+        },
         plugins: {
           legend: { position: 'top', labels: { font: { size: 12 }, padding: 16 } },
           tooltip: {
@@ -1721,6 +1785,16 @@ function resetCharts() {
 function applyChartsWithParams(start, end, granularity, skuTerm) {
   let afterF = filterAfterSale(start, end, skuTerm, supFilterOf('ch'));
 
+  // 点击柱子 → 跳明细(该期时间段 + 本模块供应商筛选)
+  let goPeriod = function(period) {
+    let r = periodToRange(period, granularity);
+    if (r) gotoDetailByRange(r.start, r.end, 'ch', period + ' 明细');
+  };
+  // 类别图(售后原因/责任方) → 按本模块当前时间段跳明细
+  let goCurrentRange = function(tip) {
+    gotoDetailByRange(start, end, 'ch', (tip ? tip + ' · ' : '') + ((start || '全部') + ' ~ ' + (end || '全部')));
+  };
+
   // Chart 1: 售后工单趋势
   let periodMap1 = {};
   afterF.forEach(r => {
@@ -1728,7 +1802,7 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
     periodMap1[p] = (periodMap1[p]||0) + 1;
   });
   let p1 = Object.keys(periodMap1).sort();
-  makeBarChart('chart1', p1, p1.map(k => periodMap1[k]), '工单数', 'rgba(78,121,167,0.8)');
+  makeBarChart('chart1', p1, p1.map(k => periodMap1[k]), '工单数', 'rgba(78,121,167,0.8)', true, goPeriod);
 
   // Chart 2: 售后数量趋势
   let periodMap2 = {};
@@ -1737,14 +1811,14 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
     periodMap2[p] = (periodMap2[p]||0) + (r.return_qty||0);
   });
   let p2 = Object.keys(periodMap2).sort();
-  makeBarChart('chart2', p2, p2.map(k => periodMap2[k]), '售后数量', 'rgba(225,87,89,0.8)');
+  makeBarChart('chart2', p2, p2.map(k => periodMap2[k]), '售后数量', 'rgba(225,87,89,0.8)', true, goPeriod);
 
 
   // Chart 4: 售后原因 TOP10
   let reasonMap = {};
   afterF.forEach(r => { let t = r.reason||'(空白)'; reasonMap[t] = (reasonMap[t]||0) + 1; });
   let rl = Object.keys(reasonMap).sort((a,b) => reasonMap[b]-reasonMap[a]).slice(0,10);
-  makeHorizontalBar('chart4', rl, rl.map(r => reasonMap[r]), '工单数');
+  makeHorizontalBar('chart4', rl, rl.map(r => reasonMap[r]), '工单数', function() { goCurrentRange('售后原因'); });
 
   // Chart 5: 责任方分布（环形图）— 与 Python convert_doorlock_to_compact.py 完全一致
   let respMap = {};
@@ -1772,7 +1846,7 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
     respMap[resp] = (respMap[resp]||0) + 1;
   });
   let rpLabels = Object.keys(respMap).sort((a,b) => respMap[b]-respMap[a]);
-  makePieChart('chart5', rpLabels, rpLabels.map(l => respMap[l]));
+  makePieChart('chart5', rpLabels, rpLabels.map(l => respMap[l]), null, function() { goCurrentRange('责任方'); });
 }
 
 function refreshAnalysis() {
@@ -2358,23 +2432,54 @@ async function resetUploadData() {
   }
 }
 
+// ========== TAB 切换 ==========
+function switchTab(name) {
+  let btn = document.querySelector('.nav-btn[data-tab="' + name + '"]');
+  if (!btn) return;
+  if (name === 'upload' && !gLoggedIn) {
+    showToast('请先登录后使用上传管理功能', 'error');
+    toggleLogin();
+    return;
+  }
+  document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+  let content = document.getElementById('tab-' + name);
+  if (content) content.classList.add('active');
+
+  if (name === 'overview') refreshOverview();
+  else if (name === 'charts') refreshCharts();
+  else if (name === 'analysis') refreshAnalysis();
+  else if (name === 'detail') refreshDetail();
+}
+
+// 点击图表 → 跳转明细 tab，套用时间段 + 来源模块的供应商筛选
+function gotoDetailByRange(start, end, fromPrefix, label) {
+  // 供应商跟随来源模块
+  let srcSup = document.getElementById((fromPrefix || 'ov') + '-supplier');
+  let dstSup = document.getElementById('dt-supplier');
+  if (srcSup && dstSup) dstSup.value = srcSup.value || '';
+  // 时间段
+  document.getElementById('dt-start').value = start || '';
+  document.getElementById('dt-end').value = end || '';
+  // 清掉明细内其它筛选，避免叠加后为空
+  document.getElementById('dt-sku').value = '';
+  document.getElementById('dt-status').value = '';
+  gDetailFilter.reason = '';
+  gDetailFilter.tag = '';
+  Object.values(_autocompleteCfg).forEach(function(cfg) {
+    let el = document.getElementById(cfg.inputId);
+    if (el) el.value = '';
+    _updateFilterChip(cfg);
+  });
+  switchTab('detail');
+  showToast('已跳转明细: ' + (label || ((start || '全部') + ' ~ ' + (end || '全部'))), 'success');
+}
+
 // ========== NAVIGATION ==========
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', function() {
-    if (this.dataset.tab === 'upload' && !gLoggedIn) {
-      showToast('请先登录后使用上传管理功能', 'error');
-      toggleLogin();
-      return;
-    }
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    this.classList.add('active');
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
-
-    if (this.dataset.tab === 'overview') refreshOverview();
-    else if (this.dataset.tab === 'charts') refreshCharts();
-    else if (this.dataset.tab === 'analysis') refreshAnalysis();
-    else if (this.dataset.tab === 'detail') refreshDetail();
+    switchTab(this.dataset.tab);
   });
 });
 
