@@ -1270,7 +1270,6 @@ function fillSupplierSelects() {
   gSupplierMap.sup.forEach(function(name, i) {
     opts += `<option value="${i}">${name} (${gSupSkuCount[i]})</option>`;
   });
-  opts += '<option value="none">未归类（无供应商资料）</option>';
   ['ov', 'ch', 'dt'].forEach(function(p) {
     let el = document.getElementById(p + '-supplier');
     if (!el) return;
@@ -1297,7 +1296,8 @@ function ensureSupIndex() {
   });
 }
 
-// 读取指定模块的供应商下拉值: '' = 全部, 数字字符串 = 供应商索引, 'none' = 未归类
+// 读取指定模块的供应商下拉值: '' = 全部, 数字字符串 = 供应商索引
+// ('none' = 未归类 的入口已移除, 过滤分支保留以兼容旧缓存页面)
 function supFilterOf(prefix) {
   let el = document.getElementById(prefix + '-supplier');
   if (!el || el.value === '') return null;
