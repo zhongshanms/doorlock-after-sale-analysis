@@ -293,6 +293,7 @@ tbody tr:hover{background:#f8f9ff}
     <label>日期:</label><input type="date" id="ov-start">
     <label>至</label><input type="date" id="ov-end">
     <label>分组:</label><select id="ov-granularity"><option value="month">按月</option><option value="week">按周</option><option value="day">按日</option></select>
+    <label>供应商:</label><select id="ov-supplier" onchange="refreshOverview()"><option value="">全部</option></select>
     <label>SKU:</label><input type="text" id="ov-sku" placeholder="搜索SKU...">
     <button class="btn btn-outline" onclick="resetOverview()">🔄 重置</button>
   </div>
@@ -325,6 +326,7 @@ tbody tr:hover{background:#f8f9ff}
     <label>日期:</label><input type="date" id="ch-start">
     <label>至</label><input type="date" id="ch-end">
     <label>分组:</label><select id="ch-granularity"><option value="month">按月</option><option value="week">按周</option><option value="day">按日</option></select>
+    <label>供应商:</label><select id="ch-supplier" onchange="refreshCharts()"><option value="">全部</option></select>
     <label>SKU:</label><input type="text" id="ch-sku" placeholder="搜索SKU...">
     <button class="btn btn-outline" onclick="resetCharts()">🔄 重置</button>
   </div>
@@ -352,6 +354,7 @@ tbody tr:hover{background:#f8f9ff}
   <div class="filter-bar">
     <label>日期:</label><input type="date" id="dt-start">
     <label>至</label><input type="date" id="dt-end">
+    <label>供应商:</label><select id="dt-supplier" onchange="refreshDetail()"><option value="">全部</option></select>
     <label>SKU:</label><input type="text" id="dt-sku" placeholder="搜索SKU...">
     <label>售后原因:</label><span class="autocomplete-wrap"><input type="text" id="dt-reason" placeholder="选择售后原因..." autocomplete="off" readonly><div class="autocomplete-list" id="dt-reason-list"></div></span><span class="filter-chip" id="dt-reason-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('reason')">×</span></span>
     <label>标签:</label><span class="autocomplete-wrap"><input type="text" id="dt-tag" placeholder="选择标签..." autocomplete="off" readonly><div class="autocomplete-list" id="dt-tag-list"></div></span><span class="filter-chip" id="dt-tag-chip"><span class="chip-text"></span><span class="chip-close" onclick="clearDetailFilter('tag')">×</span></span>
@@ -364,7 +367,7 @@ tbody tr:hover{background:#f8f9ff}
       <table>
         <thead><tr>
           <th class="sortable" onclick="sortDetail('create_time')">创建时间 <span class="sort-icon">▼▲</span></th>
-          <th>SKU</th><th>售后类型</th><th>售后原因</th><th>标签</th>
+          <th>SKU</th><th>供应商</th><th>售后类型</th><th>售后原因</th><th>标签</th>
           <th>售后数量</th>
         </tr></thead>
         <tbody id="detailTable"></tbody>
@@ -636,6 +639,9 @@ async function checkVersionAndClearCache() {
 
 async function loadData() {
   let detailEl = document.getElementById('loading-detail');
+
+  // 供应商映射(与数据加载独立,任何分支都需就绪以填充筛选下拉)
+  loadSupplierMap();
 
   // ── 版本检查必须在 UploadDB 之前：旧上传数据会以旧口径覆盖新 json ──
   let currentVersion = await checkVersionAndClearCache();
@@ -1207,8 +1213,81 @@ function updateDateRangeLabel() {
   el.textContent = '(' + minD + ' ~ ' + maxD + ')';
 }
 
+// ========== 供应商筛选 ==========
+// data/supplier-map.json 由 build_supplier_map.py 生成(源: 质量管理数据库\SKU当前供应商.xlsx)
+let gSupplierMap = null;      // {v, src, sup:[名称...], m:{SKU: 索引}}
+let gSupSkuCount = [];        // 各供应商 SKU 数
+let gBizSkuSup = {};          // 业务SKU(含 -N 后缀) -> 供应商索引;未匹配则不存在
+let _bizSupBuiltFor = '';     // 索引构建时的数据规模标记,用于失效重建
+
+function supBaseSku(sku) { return String(sku || '').replace(/-\d+$/, ''); }
+
+async function loadSupplierMap() {
+  try {
+    let r = await fetch('./data/supplier-map.json?v=' + APP_VERSION, {cache: 'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    gSupplierMap = await r.json();
+    gSupSkuCount = gSupplierMap.sup.map(() => 0);
+    Object.values(gSupplierMap.m).forEach(i => { if (gSupSkuCount[i] !== undefined) gSupSkuCount[i]++; });
+    fillSupplierSelects();
+    debugLog('供应商映射已加载: ' + gSupplierMap.sup.length + ' 家 / ' + Object.keys(gSupplierMap.m).length + ' 个SKU (源: ' + (gSupplierMap.src || '?') + ' v' + (gSupplierMap.v || '?') + ')', 'success');
+  } catch (e) {
+    debugLog('供应商映射加载失败(下拉仅显示"全部"): ' + e.message, 'warn');
+  }
+}
+
+function fillSupplierSelects() {
+  if (!gSupplierMap) return;
+  let opts = '<option value="">全部</option>';
+  gSupplierMap.sup.forEach(function(name, i) {
+    opts += `<option value="${i}">${name} (${gSupSkuCount[i]})</option>`;
+  });
+  opts += '<option value="none">未归类（无供应商资料）</option>';
+  ['ov', 'ch', 'dt'].forEach(function(p) {
+    let el = document.getElementById(p + '-supplier');
+    if (!el) return;
+    let keep = el.value;
+    el.innerHTML = opts;
+    if (keep) el.value = keep;
+  });
+}
+
+// 业务SKU -> 供应商索引(含 -N 后缀归一化);数据量变化时重建
+function ensureSupIndex() {
+  let stamp = gAfterSale.length + ':' + gSales.length;
+  if (stamp === _bizSupBuiltFor) return;
+  _bizSupBuiltFor = stamp;
+  gBizSkuSup = {};
+  if (!gSupplierMap) return;
+  let seen = new Set();
+  gAfterSale.forEach(function(r) { if (r.sku) seen.add(r.sku); });
+  gSales.forEach(function(r) { if (r.sku) seen.add(r.sku); });
+  seen.forEach(function(sku) {
+    let idx = gSupplierMap.m[sku];
+    if (idx === undefined) idx = gSupplierMap.m[supBaseSku(sku)];
+    if (idx !== undefined) gBizSkuSup[sku] = idx;
+  });
+}
+
+// 读取指定模块的供应商下拉值: '' = 全部, 数字字符串 = 供应商索引, 'none' = 未归类
+function supFilterOf(prefix) {
+  let el = document.getElementById(prefix + '-supplier');
+  if (!el || el.value === '') return null;
+  ensureSupIndex();
+  if (el.value === 'none') return 'none';
+  return parseInt(el.value);
+}
+
+function skuIdOf(r) { return gBizSkuSup[r.sku]; }
+
+function supNameOf(sku) {
+  if (!gSupplierMap) return '';
+  let idx = gBizSkuSup[sku];
+  return idx === undefined ? '' : gSupplierMap.sup[idx];
+}
+
 // ========== DATA FILTERING ==========
-function filterAfterSale(startDate, endDate, skuTerm) {
+function filterAfterSale(startDate, endDate, skuTerm, supIdx) {
   let start = startDate ? parseDate(startDate) : null;
   let end = endDate ? parseDate(endDate) : null;
   // Set end to end of day
@@ -1220,11 +1299,16 @@ function filterAfterSale(startDate, endDate, skuTerm) {
     if (start && d < start) return false;
     if (end && d > end) return false;
     if (skuTerm && !r.sku.toUpperCase().includes(skuTerm.toUpperCase())) return false;
+    if (supIdx !== null && supIdx !== undefined) {
+      let si = skuIdOf(r);
+      if (supIdx === 'none') { if (si !== undefined) return false; }
+      else if (si !== supIdx) return false;
+    }
     return true;
   });
 }
 
-function filterSales(startDate, endDate) {
+function filterSales(startDate, endDate, supIdx) {
   let start = startDate ? parseDate(startDate) : null;
   let end = endDate ? parseDate(endDate) : null;
   if (end) end.setHours(23,59,59,999);
@@ -1429,12 +1513,14 @@ function resetOverview() {
   });
   document.getElementById('ov-granularity').value = 'month';
   document.getElementById('ov-sku').value = '';
+  document.getElementById('ov-supplier').value = '';
   refreshOverview();
 }
 
 function applyOverviewWithParams(start, end, granularity, skuTerm) {
-  let afterF = filterAfterSale(start, end, skuTerm);
-  let salesF = filterSales(start, end);
+  let supIdx = supFilterOf('ov');
+  let afterF = filterAfterSale(start, end, skuTerm, supIdx);
+  let salesF = filterSales(start, end, supIdx);
 
   // Cards
   let totalOrders = salesF.reduce((s,r) => s + (r.order_qty||0), 0);
@@ -1623,11 +1709,12 @@ function resetCharts() {
   });
   document.getElementById('ch-granularity').value = 'month';
   document.getElementById('ch-sku').value = '';
+  document.getElementById('ch-supplier').value = '';
   refreshCharts();
 }
 
 function applyChartsWithParams(start, end, granularity, skuTerm) {
-  let afterF = filterAfterSale(start, end, skuTerm);
+  let afterF = filterAfterSale(start, end, skuTerm, supFilterOf('ch'));
 
   // Chart 1: 售后工单趋势
   let periodMap1 = {};
@@ -1745,6 +1832,7 @@ function resetDetail() {
     if(s) s.value=''; if(e) e.value='';
   });
   document.getElementById('dt-sku').value = '';
+  document.getElementById('dt-supplier').value = '';
   document.getElementById('dt-status').value = '';
   document.getElementById('dt-reason').value = '';
   document.getElementById('dt-tag').value = '';
@@ -1769,7 +1857,7 @@ function applyDetailWithParams() {
   let reasonTerm = gDetailFilter.reason;
   let tagTerm = gDetailFilter.tag;
 
-  let afterF = filterAfterSale(start, end, skuTerm);
+  let afterF = filterAfterSale(start, end, skuTerm, supFilterOf('dt'));
   if (statusFilter) afterF = afterF.filter(r => r.refund_status === statusFilter);
   if (reasonTerm) {
     if (reasonTerm === BLANK_SENTINEL) afterF = afterF.filter(r => !r.reason);
@@ -1794,16 +1882,19 @@ function applyDetailWithParams() {
 
   let display = afterF.slice(0, 500);
   let tbody = document.getElementById('detailTable');
-  tbody.innerHTML = display.map(r => `
+  tbody.innerHTML = display.map(r => {
+    let sup = supNameOf(r.sku) || (gSupplierMap ? '未归类' : '');
+    return `
     <tr>
       <td>${r.create_time||r.create_date||''}</td>
       <td>${r.sku}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${sup}">${sup}</td>
       <td>${r.after_sale_type}</td>
       <td>${r.reason}</td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis" title="${r.tag}">${r.tag}</td>
       <td>${r.return_qty}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ========== AUTOCOMPLETE for reason/tag inputs ==========
@@ -1820,7 +1911,7 @@ function _countField(field) {
   const end = document.getElementById('dt-end').value;
   const skuTerm = document.getElementById('dt-sku').value.trim();
   const dataset = (typeof filterAfterSale === 'function')
-    ? filterAfterSale(start, end, skuTerm)
+    ? filterAfterSale(start, end, skuTerm, supFilterOf('dt'))
     : gAfterSale;
   const counter = { __BLANK__: 0 };
   for (const r of dataset) {

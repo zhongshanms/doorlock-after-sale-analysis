@@ -75,7 +75,15 @@ exit /b 1
 
 :RUN_SYNC
 echo.
-echo [2/2] 双端推送...
+echo [2/3] 刷新供应商映射（SKU->供应商）...
+if not exist "%PYTHON%" (
+    echo [警告] Python 未找到，跳过供应商映射刷新
+) else (
+    "%PYTHON%" "%~dp0build_supplier_map.py"
+    if errorlevel 1 echo [警告] 供应商映射刷新失败（不影响数据更新）
+)
+echo.
+echo [3/3] 双端推送...
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SYNC%"
 if %ERRORLEVEL% neq 0 (

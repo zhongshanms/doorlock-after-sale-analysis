@@ -182,12 +182,21 @@ $DestData = Join-Path $Cache "data\after-sale-data-compact.json"
 Copy-Item -Path $SourceFile -Destination $DestData -Force
 Write-Host "  [OK] data/after-sale-data-compact.json"
 
+# 供应商映射(存在则一并同步,供网页端"筛选供应商"使用)
+$SupSrc = Join-Path $PSScriptRoot "data\supplier-map.json"
+$SupDest = Join-Path $Cache "data\supplier-map.json"
+if (Test-Path -LiteralPath $SupSrc) {
+    Copy-Item -Path $SupSrc -Destination $SupDest -Force
+    Write-Host "  [OK] data/supplier-map.json"
+}
+
 # ── 提交 ──
 Write-Host ""
 Write-Host "[2/4] 提交..."
 & "$Git" config user.email "zhongshanms@github.com"
 & "$Git" config user.name "门锁数据同步"
 & "$Git" add data/after-sale-data-compact.json
+if (Test-Path -LiteralPath $SupDest) { & "$Git" add data/supplier-map.json }
 $commitMsg = "data sync: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 & "$Git" commit -m $commitMsg
 if ($LASTEXITCODE -ne 0) {
