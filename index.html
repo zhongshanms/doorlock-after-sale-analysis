@@ -1310,6 +1310,7 @@ function skuIdOf(r) { return gBizSkuSup[r.sku]; }
 
 function supNameOf(sku) {
   if (!gSupplierMap) return '';
+  ensureSupIndex();   // 明细列展示也需索引;不能只依赖选择供应商时构建
   let idx = gBizSkuSup[sku];
   return idx === undefined ? '' : gSupplierMap.sup[idx];
 }
