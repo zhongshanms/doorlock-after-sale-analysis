@@ -63,6 +63,19 @@ def is_excluded_supplier(name):
     return any(n == s or (len(s) >= 4 and s in n) for s in EXCLUDED_SUPPLIERS)
 
 
+# ── 人工指定归属(用户确认的系列 → 供应商) ──
+ASSIGN_FILE = os.path.join(BASE, "supplier_assign.json")
+ASSIGN = {}   # 供应商名 -> [前缀...]
+try:
+    with open(ASSIGN_FILE, encoding="utf-8") as _f:
+        _a = json.load(_f)
+    ASSIGN = {str(k): [str(p).strip().upper() for p in v] for k, v in (_a.get("families") or {}).items()}
+except FileNotFoundError:
+    pass
+except Exception as _e:
+    print(f"[!] supplier_assign.json 读取失败: {_e}")
+
+
 def _decrypt(path):
     """DLP 加密文件 -> 明文临时文件路径;非加密直接返回"""
     with open(path, "rb") as f:
@@ -166,10 +179,7 @@ def build(src_path=DEFAULT_SRC):
         sku_map[sku] = sup_idx(sup)
     direct_cnt = len(sku_map)
 
-    # 2) 前缀继承: 业务数据中出现、但采购表无记录的 SKU,
-    #    取前6位前缀相同的已归类 SKU; 多候选按【最近下单时间】优先,
-    #    时间并列时取该前缀下 SKU 数更多者(产品换供应商时以新供应商为准)
-    inherited = {}
+    # 业务数据中出现的基础 SKU(去 -N 包装后缀), 用于归属补齐
     biz_base = set()
     if os.path.exists(COMPACT_JSON):
         with open(COMPACT_JSON, encoding="utf-8") as f:
@@ -177,10 +187,22 @@ def build(src_path=DEFAULT_SRC):
         for key in ("ar", "sr"):
             for r in compact.get(key, []):
                 s = str(r.get("sku") or "").strip()
-                up = s.upper()
-                if up.startswith("MS") and not up.startswith("MSCG"):
+                if s.upper().startswith("MS") and not is_excluded_sku(s):
                     biz_base.add(re.sub(r"-\d+$", "", s))
 
+    # 2) 人工指定归属(用户确认的系列): 优先于同前缀自动继承
+    assigned = {}
+    for sup_name, prefixes in ASSIGN.items():
+        for p in prefixes:
+            for b in sorted(biz_base):
+                if b not in sku_map and b.upper().startswith(p):
+                    assigned[b] = sup_name
+                    sku_map[b] = sup_idx(sup_name)
+
+    # 3) 前缀继承: 业务数据中出现、但采购表无记录的 SKU,
+    #    取前6位前缀相同的已归类 SKU; 多候选按【最近下单时间】优先,
+    #    时间并列时取该前缀下 SKU 数更多者(产品换供应商时以新供应商为准)
+    inherited = {}
     for b in sorted(biz_base):
         if b in sku_map:
             continue
