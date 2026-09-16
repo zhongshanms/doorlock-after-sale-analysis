@@ -14,9 +14,12 @@
 """
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import date
+
+PREFIX_LEN = 6   # SKU 前缀长度(前6位, 如 MS2093), 用于同系列供应商继承
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE, "data")
@@ -74,69 +77,123 @@ def build(src_path=DEFAULT_SRC):
     headers = [str(c).strip() if c is not None else "" for c in rows[hdr_idx]]
     sku_col = headers.index("SKU")
     sup_col = next(i for i, h in enumerate(headers) if "当前供应商" in h)
-    print(f"  表头行: {hdr_idx + 1} | SKU列={sku_col + 1} 供应商列={sup_col + 1}")
+    time_col = next((i for i, h in enumerate(headers) if "下单时间" in h), None)
+    print(f"  表头行: {hdr_idx + 1} | SKU列={sku_col + 1} 供应商列={sup_col + 1} "
+          f"下单时间列={(time_col + 1) if time_col is not None else '无'}")
 
     suppliers = []
     sup_index = {}
-    sku_map = {}
-    skipped = {"non_ms": 0, "empty_sup": 0}
+
+    def sup_idx(name):
+        if name not in sup_index:
+            sup_index[name] = len(suppliers)
+            suppliers.append(name)
+        return sup_index[name]
+
+    # 收集记录, 同时建前缀索引: 前缀 -> {供应商: [最近下单时间, SKU数]}
+    recs = []
+    pfx_index = {}
+    skipped = {"non_ms": 0, "mscg": 0, "empty_sup": 0}
     for row in rows[hdr_idx + 1:]:
         if not row:
             continue
         sku = str(row[sku_col]).strip() if row[sku_col] is not None else ""
         sup = str(row[sup_col]).strip() if len(row) > sup_col and row[sup_col] is not None else ""
+        t = (str(row[time_col]).strip()
+             if time_col is not None and len(row) > time_col and row[time_col] is not None else "")
         if not sku:
             continue
-        if not sku.upper().startswith("MS"):
+        up = sku.upper()
+        if not up.startswith("MS"):
             skipped["non_ms"] += 1
+            continue
+        if up.startswith("MSCG"):      # 非门锁产品
+            skipped["mscg"] += 1
             continue
         if not sup:
             skipped["empty_sup"] += 1
             continue
-        if sup not in sup_index:
-            sup_index[sup] = len(suppliers)
-            suppliers.append(sup)
-        sku_map[sku] = sup_index[sup]
+        recs.append((sku, sup, t))
+        e = pfx_index.setdefault(up[:PREFIX_LEN], {}).setdefault(sup, ["", 0])
+        if t > e[0]:
+            e[0] = t
+        e[1] += 1
 
-    if not sku_map:
+    if not recs:
         print("[X] 未提取到任何 MS SKU 供应商映射,未覆盖输出文件")
         return 1
+
+    # 1) 直接映射(该 SKU 有采购记录)
+    sku_map = {}
+    for sku, sup, _t in recs:
+        sku_map[sku] = sup_idx(sup)
+    direct_cnt = len(sku_map)
+
+    # 2) 前缀继承: 业务数据中出现、但采购表无记录的 SKU,
+    #    取前6位前缀相同的已归类 SKU; 多候选按【最近下单时间】优先,
+    #    时间并列时取该前缀下 SKU 数更多者(产品换供应商时以新供应商为准)
+    inherited = {}
+    biz_base = set()
+    if os.path.exists(COMPACT_JSON):
+        with open(COMPACT_JSON, encoding="utf-8") as f:
+            compact = json.load(f)
+        for key in ("ar", "sr"):
+            for r in compact.get(key, []):
+                s = str(r.get("sku") or "").strip()
+                up = s.upper()
+                if up.startswith("MS") and not up.startswith("MSCG"):
+                    biz_base.add(re.sub(r"-\d+$", "", s))
+
+    for b in sorted(biz_base):
+        if b in sku_map:
+            continue
+        cand = pfx_index.get(b[:PREFIX_LEN].upper())
+        if not cand:
+            continue
+        best_sup, best_meta = None, None
+        for sup, meta in cand.items():
+            if best_meta is None or (meta[0], meta[1]) > (best_meta[0], best_meta[1]):
+                best_sup, best_meta = sup, meta
+        inherited[b] = (best_sup, best_meta[0], len(cand))
+        sku_map[b] = sup_idx(best_sup)
 
     out = {
         "v": date.today().isoformat(),
         "src": os.path.basename(src_path),
         "sup": suppliers,
         "m": sku_map,
+        "inh": len(inherited),
     }
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(OUT_JSON, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
 
-    print(f"  MS SKU {len(sku_map)} 条 -> {len(suppliers)} 家供应商")
-    print(f"  跳过: 非MS {skipped['non_ms']} 条, 供应商为空 {skipped['empty_sup']} 条")
+    print(f"  MS SKU 直接映射 {direct_cnt} 条; 前缀继承补充 {len(inherited)} 条 → 共 {len(sku_map)} 条, {len(suppliers)} 家供应商")
+    print(f"  跳过: 非MS {skipped['non_ms']} 条, MSCG {skipped['mscg']} 条, 供应商为空 {skipped['empty_sup']} 条")
     for s, i in sorted(sup_index.items(), key=lambda kv: -sum(1 for v in sku_map.values() if v == kv[1])):
         cnt = sum(1 for v in sku_map.values() if v == i)
         print(f"    {cnt:>5}  {s}")
     print(f"  输出: {OUT_JSON} ({os.path.getsize(OUT_JSON) / 1024:.1f} KB)")
 
-    # 覆盖率: 与售后/销量数据的 SKU 比对
-    if os.path.exists(COMPACT_JSON):
-        with open(COMPACT_JSON, encoding="utf-8") as f:
-            d = json.load(f)
-        data_skus = set()
-        for r in d.get("ar", []):
-            if r.get("sku"):
-                data_skus.add(str(r["sku"]).strip())
-        for r in d.get("sr", []):
-            if r.get("sku"):
-                data_skus.add(str(r["sku"]).strip())
-        ms_skus = {s for s in data_skus if s.upper().startswith("MS")}
-        matched = {s for s in ms_skus if s in sku_map}
-        miss = sorted(ms_skus - matched)
-        print(f"  覆盖率: 业务数据 MS SKU {len(ms_skus)} 个, 已匹配供应商 {len(matched)} 个 "
-              f"({len(matched) / len(ms_skus) * 100:.1f}%)")
+    if inherited:
+        print(f"  前缀继承明细(按前{PREFIX_LEN}位同系列 + 最近下单时间):")
+        for b in sorted(inherited):
+            sup, t, ncand = inherited[b]
+            tail = f", 并列 {ncand} 家候选" if ncand > 1 else ""
+            print(f"    {b:<16} → {sup}  (最近下单 {t or '未知'}{tail})")
+
+    # 覆盖率: 与业务数据的基础 SKU 比对(去掉 -N 包装后缀)
+    if biz_base:
+        matched = {s for s in biz_base if s in sku_map}
+        miss = sorted(biz_base - matched)
+        print(f"  覆盖率: 业务基础SKU {len(biz_base)} 个, 已归属 {len(matched)} 个 "
+              f"({len(matched) / len(biz_base) * 100:.1f}%)")
         if miss:
-            print(f"  未匹配 {len(miss)} 个(筛选时归入'未归类'): {', '.join(miss[:12])}{' ...' if len(miss) > 12 else ''}")
+            fam = {}
+            for s in miss:
+                fam.setdefault(s[:PREFIX_LEN], []).append(s)
+            print(f"  仍未归属 {len(miss)} 个 / {len(fam)} 个系列(采购表中这些系列无任何记录): "
+                  + ", ".join(f"{k}×{len(v)}" for k, v in sorted(fam.items())))
 
     return 0
 
