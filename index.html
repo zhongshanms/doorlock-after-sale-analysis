@@ -1584,7 +1584,7 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
   let totalOrders = salesF.reduce((s,r) => s + (r.order_qty||0), 0);
   let totalSales = salesF.reduce((s,r) => s + (r.sales_qty||0), 0);  // 销量(套)
   let afterCount = afterF.length;
-  let returnQty = afterF.reduce((s,r) => s + (r.return_qty||0), 0);  // 售后数量(套)
+  let returnQty = afterF.reduce((s,r) => s + (r.return_qty||0), 0);  // 退换货量(套)
   let uniqueSku = new Set(afterF.map(r => r.sku)).size;
 
   document.getElementById('overviewCards').innerHTML = `
@@ -1616,8 +1616,8 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
 
   // Trend chart
   let salesVals = periods.map(p => groupMapSL[p]||0);  // 销量(套)
-  let afterVals = periods.map(p => (groupMapAS[p]||{}).returnQty||0);  // 售后数量(套)
-  // 所选时间段内的平均售后率（加权：Σ售后数量(套)/Σ销量(套)，与卡片"售后率"口径一致）
+  let afterVals = periods.map(p => (groupMapAS[p]||{}).returnQty||0);  // 退换货量(套)
+  // 所选时间段内的平均售后率（加权：Σ退换货量(套)/Σ销量(套)，与卡片"售后率"口径一致）
   let avgRate = totalSales > 0 ? (returnQty / totalSales * 100).toFixed(1) : 0;
 
   destroyChart('chartTrend');
@@ -1636,9 +1636,9 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
             borderRadius: 4,
             order: 1,
           },
-          // 售后数量(套) — 柱状图
+          // 退换货量(套) — 柱状图
           {
-            label: '售后数量(套)',
+            label: '退换货量(套)',
             data: afterVals,
             backgroundColor: 'rgba(225,87,89,0.8)',
             borderRadius: 4,
@@ -1705,8 +1705,8 @@ function applyOverviewWithParams(start, end, granularity, skuTerm) {
       plugins: [{
         id: 'afterRateLabels',
         afterDatasetsDraw(chart) {
-          // 在售后数量柱状图上方标注售后率
-          let barMeta = chart.getDatasetMeta(1); // 售后数量柱状图（索引 1）
+          // 在退换货量柱状图上方标注售后率
+          let barMeta = chart.getDatasetMeta(1); // 退换货量柱状图（索引 1）
           barMeta.data.forEach((bar, i) => {
             if (salesVals[i] > 0) {
               let rate = (afterVals[i] / salesVals[i] * 100).toFixed(1);
@@ -1805,14 +1805,14 @@ function applyChartsWithParams(start, end, granularity, skuTerm) {
   let p1 = Object.keys(periodMap1).sort();
   makeBarChart('chart1', p1, p1.map(k => periodMap1[k]), '工单数', 'rgba(78,121,167,0.8)', true, goPeriod);
 
-  // Chart 2: 售后数量趋势
+  // Chart 2: 退换货量趋势
   let periodMap2 = {};
   afterF.forEach(r => {
     let p = fmtPeriod(r.create_date, granularity);
     periodMap2[p] = (periodMap2[p]||0) + (r.return_qty||0);
   });
   let p2 = Object.keys(periodMap2).sort();
-  makeBarChart('chart2', p2, p2.map(k => periodMap2[k]), '售后数量', 'rgba(225,87,89,0.8)', true, goPeriod);
+  makeBarChart('chart2', p2, p2.map(k => periodMap2[k]), '退换货量', 'rgba(225,87,89,0.8)', true, goPeriod);
 
 
   // Chart 4: 售后原因 TOP10
@@ -1882,7 +1882,7 @@ function applyAnalysisWithParams(start, end, skuTerm) {
     `<tr><td>${i+1}</td><td title="${k}">${k}</td><td style="text-align:right">${fmtNum(v)}</td><td style="text-align:right">${fmtPct(v,total3)}</td></tr>`
   ).join('');
 
-  // 二、售后数量 TOP30 SKU
+  // 二、退换货量 TOP30 SKU
   let skuMap = {};
   afterF.forEach(r => {
     if (!skuMap[r.sku]) skuMap[r.sku] = { count:0, returnQty:0, refundAmt:0 };
