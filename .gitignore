@@ -18,9 +18,13 @@ __pycache__/
 *.bat
 !sync.bat
 !一键更新.bat
+!新电脑初始化.bat
 *.ps1
 !sync.ps1
+!decrypt_xlsx.ps1
 
 # Logs
 *.log
 .sync_cache/
+fetch.log
+python_path.txt

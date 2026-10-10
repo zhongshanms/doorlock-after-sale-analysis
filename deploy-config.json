@@ -1,0 +1,7 @@
+{
+  "_说明": "部署参数。换服务器/换 GitHub 仓库时只改这里，无需改脚本。可运行『新电脑初始化.bat』自动生成本文件。",
+  "github_repo": "git@github.com:zhongshanms/doorlock-after-sale-analysis.git",
+  "server_url": "root@119.29.107.118:/www/wwwroot/doorlock.zhongshanzhiliang.top",
+  "pages_url": "https://zhongshanms.github.io/doorlock-after-sale-analysis/",
+  "site_url": "https://doorlock.zhongshanzhiliang.top/"
+}

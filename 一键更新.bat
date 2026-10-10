@@ -2,7 +2,15 @@
 title 亚马逊门锁售后分析 - 一键更新
 chcp 65001 >nul
 
-set "PYTHON=%~dp0..\..\..\.workbuddy\binaries\python\versions\3.13.12\python.exe"
+REM ── 定位 Python（多级探测：配置覆盖 → WorkBuddy 相对路径 → 用户目录任意版本 → PATH → 常见位置）──
+set "PYTHON="
+if exist "%~dp0python_path.txt" for /f "usebackq delims=" %%p in ("%~dp0python_path.txt") do if not defined PYTHON if exist "%%p" set "PYTHON=%%p"
+if not defined PYTHON if exist "%~dp0..\..\..\.workbuddy\binaries\python\versions\3.13.12\python.exe" set "PYTHON=%~dp0..\..\..\.workbuddy\binaries\python\versions\3.13.12\python.exe"
+if not defined PYTHON for /d %%d in ("%USERPROFILE%\.workbuddy\binaries\python\versions\*") do if not defined PYTHON if exist "%%d\python.exe" set "PYTHON=%%d\python.exe"
+if not defined PYTHON for /f "delims=" %%p in ('where python 2^>nul') do if not defined PYTHON set "PYTHON=%%p"
+if not defined PYTHON if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" set "PYTHON=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+if not defined PYTHON if exist "C:\Python313\python.exe" set "PYTHON=C:\Python313\python.exe"
+
 set "CONVERT=%~dp0convert_doorlock_to_compact.py"
 set "SYNC=%~dp0sync.ps1"
 set "DECRYPT=%~dp0decrypt_xlsx.ps1"
@@ -30,8 +38,16 @@ if errorlevel 1 goto FAIL_CONVERT
 goto RUN_SYNC
 
 :RUN_CONVERT
+if not defined PYTHON (
+    echo [X] 未找到 Python。请任选其一:
+    echo     1^) 安装 WorkBuddy 后重试（其自带 Python 会被自动探测）
+    echo     2^) 在项目目录新建 python_path.txt，写入 python.exe 完整路径（单行）
+    pause
+    exit /b 1
+)
 if not exist "%PYTHON%" (
-    echo [X] Python 未找到: %PYTHON%
+    echo [X] Python 路径无效: %PYTHON%
+    echo     请修改 python_path.txt，或运行"新电脑初始化.bat"重新配置
     pause
     exit /b 1
 )

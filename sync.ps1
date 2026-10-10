@@ -4,6 +4,27 @@
 
 $ErrorActionPreference = "Stop"
 
+# ── 部署参数：优先读项目根 deploy-config.json，缺失则用默认值 ──
+# 换服务器/换 GitHub 仓库时只需改 deploy-config.json，无需改本脚本
+$Cfg = @{
+    github_repo = "git@github.com:zhongshanms/doorlock-after-sale-analysis.git"
+    server_url  = "root@119.29.107.118:/www/wwwroot/doorlock.zhongshanzhiliang.top"
+    pages_url   = "https://zhongshanms.github.io/doorlock-after-sale-analysis/"
+    site_url    = "https://doorlock.zhongshanzhiliang.top/"
+}
+$CfgPath = Join-Path $PSScriptRoot "deploy-config.json"
+if (Test-Path -LiteralPath $CfgPath) {
+    try {
+        $user = Get-Content -LiteralPath $CfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($k in @($Cfg.Keys)) {
+            if ($user.PSObject.Properties.Name -contains $k -and $user.$k) { $Cfg[$k] = [string]$user.$k }
+        }
+        Write-Host "[配置] 已读取 deploy-config.json"
+    } catch {
+        Write-Host "[警告] deploy-config.json 解析失败，使用默认参数：$_"
+    }
+}
+
 Write-Host "============================================"
 Write-Host "  数据上传 - 亚马逊门锁售后分析系统"
 Write-Host "============================================"
@@ -67,7 +88,7 @@ if ($IsEncrypted) {
     }
 }
 
-$Repo = "git@github.com:zhongshanms/doorlock-after-sale-analysis.git"
+$Repo = $Cfg.github_repo
 $Cache = Join-Path $PSScriptRoot ".sync_cache"
 $Branch = "main"
 
@@ -207,7 +228,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # ── 推送（双远程：GitHub + 宝塔） ──
 $ServerRemote = "server"
-$ServerUrl = "root@119.29.107.118:/www/wwwroot/doorlock.zhongshanzhiliang.top"
+$ServerUrl = $Cfg.server_url
 $MaxRetries = 3
 
 function Push-WithRetry {
@@ -245,15 +266,28 @@ function Push-ToRemote {
 Write-Host ""
 Write-Host "[3/4] 推送数据..."
 
-# 确保 server 远程已添加
+# 确保 server 远程已添加，且远程地址与配置一致(换服务器后可自动纠正)
 $remotes = & "$Git" remote 2>$null
 if ($remotes -notcontains $ServerRemote) {
     & "$Git" remote add $ServerRemote $ServerUrl 2>$null
+} else {
+    $curServer = (& "$Git" remote get-url $ServerRemote 2>$null | Select-Object -First 1)
+    if ($curServer -ne $ServerUrl) {
+        & "$Git" remote set-url $ServerRemote $ServerUrl
+        Write-Host "  [配置] server 远程地址已更新为新服务器"
+    }
+}
+if ($remotes -contains 'origin') {
+    $curOrigin = (& "$Git" remote get-url origin 2>$null | Select-Object -First 1)
+    if ($curOrigin -ne $Repo) {
+        & "$Git" remote set-url origin $Repo
+        Write-Host "  [配置] origin 远程地址已更新"
+    }
 }
 
 $results = @{}
-$results['github'] = Push-ToRemote "$Git" 'origin' 'GitHub' 'https://zhongshanms.github.io/doorlock-after-sale-analysis/'
-$results['server'] = Push-ToRemote "$Git" $ServerRemote '宝塔服务器' 'https://doorlock.zhongshanzhiliang.top/' -Force
+$results['github'] = Push-ToRemote "$Git" 'origin' 'GitHub' $Cfg.pages_url
+$results['server'] = Push-ToRemote "$Git" $ServerRemote '宝塔服务器' $Cfg.site_url -Force
 
 Write-Host ""
 Write-Host "============================================"
