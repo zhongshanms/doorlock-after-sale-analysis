@@ -8,7 +8,13 @@ try:
     import openpyxl
 except ImportError:
     print("需要 openpyxl，正在安装...")
-    os.system(f"{sys.executable} -m pip install openpyxl")
+    import importlib, site, subprocess
+    subprocess.run([sys.executable, "-m", "pip", "install", "openpyxl"])
+    # 同进程内新装的包必须刷新导入缓存; pip 常装到 user site, 需确保其在 sys.path 中
+    _usp = site.getusersitepackages()
+    if _usp and _usp not in sys.path:
+        sys.path.append(_usp)
+    importlib.invalidate_caches()
     import openpyxl
 
 
